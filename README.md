@@ -1,36 +1,166 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Khit E-Commerce Platform
 
-## Getting Started
+A premium menswear e-commerce platform for Myanmar local brand **Khit**, built with Next.js 14+, Convex, Better Auth, and Sentry.
 
-First, run the development server:
+## Overview
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Brand**: Khit - Premium Menswear from Myanmar
+- **Location**: Yangon (Store Pickup: Weekdays 9am - 4pm)
+- **Currency**: MMK (Myanmar Kyat)
+- **Payment**: Cash on Delivery (COD)
+- **Delivery**: Shipping (2,500 Ks) or Store Pickup (Free)
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Bun (package manager)
+- Node.js 18+
+
+### Installation
+
+1. **Navigate to project:**
+   ```bash
+   cd local-brand-khit
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   bun install
+   ```
+
+3. **Set up environment variables:**
+   ```bash
+   cp .env.local.example .env.local
+   # Edit .env.local with your values
+   ```
+
+4. **Generate Better Auth secret:**
+   ```bash
+   openssl rand -base64 32
+   # Copy the output to BETTER_AUTH_SECRET in .env.local
+   ```
+
+5. **Initialize Convex:**
+   ```bash
+   bunx convex dev
+   ```
+   This will start the Convex dev server and provide you with a deployment URL.
+
+6. **Update environment variables:**
+   Add your Convex deployment URL to `.env.local`:
+   ```
+   CONVEX_DEPLOYMENT=your_convex_url_here
+   NEXT_PUBLIC_CONVEX_URL=your_convex_url_here
+   ```
+
+7. **Run the development server:**
+   ```bash
+   bun run dev
+   ```
+
+8. **Open [http://localhost:3000](http://localhost:3000)**
+
+## 📋 Sentry Setup (Optional - Phase 0)
+
+1. Create a Sentry account at [sentry.io](https://sentry.io)
+2. Create a new project for "khit-ecommerce"
+3. Get your DSN from the project settings
+4. Add to `.env.local`:
+   ```
+   SENTRY_DSN=your_dsn_here
+   SENTRY_ORG=your_org_slug
+   SENTRY_PROJECT=khit-ecommerce
+   ```
+
+## 📁 Project Structure
+
+```
+├── app/
+│   ├── (store)/          # Customer-facing storefront
+│   ├── (admin)/admin/    # Admin panel
+│   └── api/auth/         # Better Auth API routes
+├── components/
+│   ├── ui/               # shadcn/ui components
+│   ├── store/            # Storefront components
+│   └── admin/            # Admin components
+├── convex/               # Convex backend
+│   ├── schema.ts         # Database schema
+│   ├── auth.ts           # Better Auth config
+│   └── http.ts           # HTTP routes
+├── i18n/                 # Internationalization
+│   ├── messages/en.json  # English translations
+│   └── messages/my.json  # Burmese translations
+└── lib/                  # Utilities
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠️ Technology Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Frontend:** Next.js 14+ (App Router)
+- **UI Library:** shadcn/ui + Tailwind CSS
+- **Backend:** Convex (real-time database)
+- **Authentication:** Better Auth
+- **Monitoring:** Sentry
+- **Package Manager:** Bun
+- **Deployment:** Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📦 Available Scripts
 
-## Learn More
+- `bun run dev` - Start development server
+- `bun run build` - Build for production
+- `bun run start` - Start production server
+- `bun run lint` - Run ESLint
+- `bunx convex dev` - Start Convex dev server
 
-To learn more about Next.js, take a look at the following resources:
+## 👤 Initial Admin
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The first user to register with email `zweaungnaing26@gmail.com` will be automatically assigned the admin role.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 📱 Default Categories
 
-## Deploy on Vercel
+### Menswear
+- **Clothing**: T-shirts, Shirts, Pants, Shorts, Jackets, Hoodies, Sweaters, Jeans
+- **Shoes**: (To be configured in admin)
+- **Accessories**: (To be configured in admin)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📝 Environment Variables
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `NEXT_PUBLIC_APP_URL` | Application URL | Yes |
+| `CONVEX_DEPLOYMENT` | Convex deployment URL | Yes |
+| `NEXT_PUBLIC_CONVEX_URL` | Convex public URL | Yes |
+| `BETTER_AUTH_SECRET` | Better Auth secret key | Yes |
+| `SENTRY_DSN` | Sentry DSN (optional) | No |
+| `INITIAL_ADMIN_EMAIL` | Initial admin email | Yes |
+
+## 🎯 Development Phases
+
+### Phase 0 ✅ (Current)
+- Project setup and configuration
+- Database schema design
+- Admin panel foundation
+- Storefront foundation
+- i18n setup (English + Burmese)
+
+### Phase 1 (Coming Soon)
+- Homepage with hero section
+- Product listing pages
+- Product detail pages
+- Shopping cart
+- Checkout with COD
+
+### Phase 2 (Coming Soon)
+- User authentication
+- Customer accounts
+- Order history
+- Profile management
+
+### Phase 3 (Coming Soon)
+- Admin order management
+- Product management
+- Category management
+- Inventory control
+
+## 📄 License
+
+Private - All rights reserved.
