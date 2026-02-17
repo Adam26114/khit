@@ -3,11 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -21,7 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Eye, Package } from "lucide-react";
+import { Package } from "lucide-react";
+import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 
 interface OrderItem {
@@ -75,7 +73,6 @@ const statusLabels: Record<string, string> = {
 
 export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
 
   const orders = useQuery(
@@ -83,12 +80,6 @@ export default function OrdersPage() {
     statusFilter === "all" ? {} : { status: statusFilter as "pending" | "confirmed" | "processing" | "shipped" | "delivered" | "cancelled" }
   );
   const updateStatus = useMutation(api.orders.updateStatus);
-
-  const filteredOrders = (orders as Order[] | undefined)?.filter((order: Order) =>
-    order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    order.customerInfo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    order.customerInfo.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   const handleStatusUpdate = async (orderId: string, newStatus: string) => {
     try {
@@ -119,15 +110,6 @@ export default function OrdersPage() {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by order number, customer name, or email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Filter by status" />
@@ -144,67 +126,83 @@ export default function OrdersPage() {
         </Select>
       </div>
 
-      {/* Orders List */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="divide-y">
-            {filteredOrders?.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                <p>No orders found</p>
-              </div>
-            ) : (
-              filteredOrders?.map((order: Order) => (
-                <div
-                  key={order._id}
-                  className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1">
-                      <span className="font-semibold">{order.orderNumber}</span>
-                      <Badge className={statusColors[order.status]}>
-                        {statusLabels[order.status]}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {order.customerInfo.name} • {order.customerInfo.email}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(order.createdAt).toLocaleDateString()} •{" "}
-                      {order.items.length} items • Ks {order.total.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={order.status}
-                      onValueChange={(value) => handleStatusUpdate(order._id, value)}
-                    >
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="confirmed">Confirmed</SelectItem>
-                        <SelectItem value="processing">Processing</SelectItem>
-                        <SelectItem value="shipped">Shipped</SelectItem>
-                        <SelectItem value="delivered">Delivered</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setSelectedOrder(order._id)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </div>
+      <AdminDataTable
+        data={(orders as Order[]) || []}
+        getRowId={(order) => order._id}
+        emptyTitle="Empty"
+        emptyDescription="No orders found."
+        emptyIcon={Package}
+        searchPlaceholder="Filter orders..."
+        rowActions={(order) => [
+          {
+            label: "View Details",
+            onClick: () => setSelectedOrder(order._id),
+          },
+        ]}
+        columns={[
+          {
+            id: "orderNumber",
+            header: "Order",
+            searchAccessor: (order) => order.orderNumber,
+            cell: (order) => (
+              <div>
+                <div className="font-medium">{order.orderNumber}</div>
+                <div className="text-sm text-muted-foreground">
+                  {new Date(order.createdAt).toLocaleDateString()}
                 </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            ),
+          },
+          {
+            id: "customer",
+            header: "Customer",
+            searchAccessor: (order) =>
+              `${order.customerInfo.name} ${order.customerInfo.email} ${order.customerInfo.phone}`,
+            cell: (order) => (
+              <div>
+                <div>{order.customerInfo.name}</div>
+                <div className="text-sm text-muted-foreground">{order.customerInfo.email}</div>
+              </div>
+            ),
+          },
+          {
+            id: "items",
+            header: "Items",
+            cell: (order) => order.items.length,
+          },
+          {
+            id: "total",
+            header: "Total",
+            cell: (order) => `Ks ${order.total.toLocaleString()}`,
+          },
+          {
+            id: "status",
+            header: "Status",
+            searchAccessor: (order) => order.status,
+            cell: (order) => (
+              <div className="flex items-center gap-2">
+                <Badge className={statusColors[order.status]}>{statusLabels[order.status]}</Badge>
+                <Select
+                  value={order.status}
+                  onValueChange={(value) => handleStatusUpdate(order._id, value)}
+                >
+                  <SelectTrigger className="w-[128px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
+                    <SelectItem value="processing">Processing</SelectItem>
+                    <SelectItem value="shipped">Shipped</SelectItem>
+                    <SelectItem value="delivered">Delivered</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ),
+          },
+        ] satisfies AdminTableColumn<Order>[]}
+      />
 
       {/* Order Detail Dialog */}
       <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { z } from "zod";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +23,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Search, Plus, Pencil, Trash2, Package, Star } from "lucide-react";
+import { Plus, Package, Star } from "lucide-react";
 import { resolveImageSrc } from "@/lib/image";
 import { AdminMediaUploader } from "@/components/admin/media-uploader";
+import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
 
@@ -113,7 +113,6 @@ const productSchema = z
   });
 
 export default function ProductsPage() {
-  const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
@@ -128,12 +127,6 @@ export default function ProductsPage() {
   const updateProduct = useMutation(api.products.update);
   const removeProduct = useMutation(api.products.remove);
   const generateUploadUrl = useMutation(api.products.generateUploadUrl);
-
-  const filteredProducts = (products as Product[] | undefined)?.filter(
-    (product: Product) =>
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.slug.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   const clearBlobPreviews = (previewMap: Record<string, string>) => {
     Object.values(previewMap).forEach((url) => {
@@ -265,6 +258,26 @@ export default function ProductsPage() {
     }
   };
 
+  const handleBulkDelete = async (rows: Product[]) => {
+    if (rows.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${rows.length} selected products?`)) return;
+
+    let deletedCount = 0;
+    for (const row of rows) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await removeProduct({ id: row._id as any });
+        deletedCount += 1;
+      } catch (error) {
+        notify.actionError(`delete product "${row.name}"`, error);
+      }
+    }
+
+    if (deletedCount > 0) {
+      notify.success(`${deletedCount} products deleted successfully`);
+    }
+  };
+
   if (products === undefined || categories === undefined) {
     return (
       <div>
@@ -280,73 +293,84 @@ export default function ProductsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className="mb-8">
         <h1 className="text-3xl font-bold">Products</h1>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Product
-        </Button>
       </div>
 
-      <div className="relative mb-6">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search products..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <div className="divide-y">
-            {filteredProducts?.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                <p>No products found</p>
-              </div>
-            ) : (
-              filteredProducts?.map((product: Product) => (
-                <div
-                  key={product._id}
-                  className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1">
-                      <span className="font-semibold">{product.name}</span>
-                      {product.isFeatured && (
-                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                      )}
-                      {!product.isActive && <Badge variant="secondary">Inactive</Badge>}
-                      {product.isOutOfStock && <Badge variant="destructive">Out of Stock</Badge>}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {product.slug} • Stock: {product.stock}
-                    </p>
-                    <p className="text-sm">
-                      Ks {product.price.toLocaleString()}
-                      {product.salePrice && (
-                        <span className="ml-2 text-green-600">
-                          Sale: Ks {product.salePrice.toLocaleString()}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(product)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(product._id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+      <AdminDataTable
+        data={(products as Product[]) || []}
+        getRowId={(product) => product._id}
+        emptyTitle="Empty"
+        emptyDescription="No products found."
+        emptyIcon={Package}
+        searchPlaceholder="Filter products..."
+        toolbarActions={[
+          {
+            label: "Create Product",
+            icon: Plus,
+            onClick: openCreate,
+          },
+        ]}
+        rowActions={(product) => [
+          {
+            label: "Update",
+            onClick: () => openEdit(product),
+          },
+          {
+            label: "Delete",
+            destructive: true,
+            onClick: () => handleDelete(product._id),
+          },
+        ]}
+        onBulkDelete={handleBulkDelete}
+        bulkDeleteLabel="Delete selected products"
+        columns={[
+          {
+            id: "name",
+            header: "Product",
+            searchAccessor: (product) =>
+              `${product.name} ${product.description ?? ""} ${product.isFeatured ? "featured" : ""}`,
+            cell: (product) => (
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{product.name}</span>
+                  {product.isFeatured && (
+                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                  )}
+                  {!product.isActive && <Badge variant="secondary">Inactive</Badge>}
+                  {product.isOutOfStock && <Badge variant="destructive">Out of Stock</Badge>}
                 </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                <div className="text-sm text-muted-foreground">{product.description}</div>
+              </div>
+            ),
+          },
+          {
+            id: "slug",
+            header: "Slug",
+            searchAccessor: (product) => product.slug,
+            cell: (product) => <span className="text-sm text-muted-foreground">{product.slug}</span>,
+          },
+          {
+            id: "stock",
+            header: "Stock",
+            cell: (product) => product.stock,
+          },
+          {
+            id: "price",
+            header: "Price",
+            cell: (product) => (
+              <div className="text-sm">
+                Ks {product.price.toLocaleString()}
+                {product.salePrice && (
+                  <div className="text-green-600">
+                    Sale: Ks {product.salePrice.toLocaleString()}
+                  </div>
+                )}
+              </div>
+            ),
+          },
+        ] satisfies AdminTableColumn<Product>[]}
+      />
 
       <Dialog
         open={isAddDialogOpen}
