@@ -4,7 +4,6 @@ import { useState } from "react";
 import { z } from "zod";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -17,7 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Plus, Pencil, Trash2, Palette } from "lucide-react";
+import { Plus, Palette } from "lucide-react";
+import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
 
@@ -144,6 +144,26 @@ export default function ColorsPage() {
     }
   };
 
+  const handleBulkDelete = async (rows: ColorItem[]) => {
+    if (rows.length === 0) return;
+    if (!confirm(`Delete ${rows.length} selected colors?`)) return;
+
+    let deletedCount = 0;
+    for (const row of rows) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await removeColor({ id: row._id as any });
+        deletedCount += 1;
+      } catch (error) {
+        notify.actionError(`delete color "${row.name}"`, error);
+      }
+    }
+
+    if (deletedCount > 0) {
+      notify.success(`${deletedCount} colors deleted successfully`);
+    }
+  };
+
   if (colors === undefined) {
     return (
       <div>
@@ -159,55 +179,73 @@ export default function ColorsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className="mb-8">
         <h1 className="text-3xl font-bold">Colors</h1>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Color
-        </Button>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {colors.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <Palette className="mx-auto h-12 w-12 mb-4 opacity-50" />
-              <p>No colors found</p>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {(colors as ColorItem[]).map((color) => (
+      <AdminDataTable
+        data={colors as ColorItem[]}
+        getRowId={(color) => color._id}
+        emptyTitle="Empty"
+        emptyDescription="No colors found."
+        emptyIcon={Palette}
+        searchPlaceholder="Filter colors..."
+        toolbarActions={[
+          {
+            label: "Create Color",
+            icon: Plus,
+            onClick: openCreate,
+          },
+        ]}
+        rowActions={(color) => [
+          {
+            label: "Update",
+            onClick: () => openEdit(color),
+          },
+          {
+            label: "Delete",
+            destructive: true,
+            onClick: () => handleDelete(color._id),
+          },
+        ]}
+        onBulkDelete={handleBulkDelete}
+        bulkDeleteLabel="Delete selected colors"
+        columns={[
+          {
+            id: "name",
+            header: "Name",
+            searchAccessor: (color) => `${color.name} ${color.nameMm ?? ""}`,
+            cell: (color) => (
+              <div className="flex items-center gap-3">
                 <div
-                  key={color._id}
-                  className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="h-8 w-8 border rounded" style={{ backgroundColor: color.hexCode }} />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">{color.name}</span>
-                        {!color.isActive && <Badge variant="secondary">Inactive</Badge>}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {color.hexCode} • Order: {color.displayOrder}
-                        {color.nameMm ? ` • MM: ${color.nameMm}` : ""}
-                      </p>
-                    </div>
-                  </div>
+                  className="h-8 w-8 shrink-0 rounded border"
+                  style={{ backgroundColor: color.hexCode }}
+                />
+                <div>
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(color)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(color._id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <span className="font-medium">{color.name}</span>
+                    {!color.isActive && <Badge variant="secondary">Inactive</Badge>}
                   </div>
+                  {color.nameMm && (
+                    <div className="text-sm text-muted-foreground">{color.nameMm}</div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </div>
+            ),
+          },
+          {
+            id: "hex",
+            header: "Hex Code",
+            searchAccessor: (color) => color.hexCode,
+            cell: (color) => <span className="font-mono text-sm">{color.hexCode}</span>,
+          },
+          {
+            id: "order",
+            header: "Order",
+            cell: (color) => color.displayOrder,
+          },
+        ] satisfies AdminTableColumn<ColorItem>[]}
+      />
 
       <Dialog
         open={isDialogOpen}

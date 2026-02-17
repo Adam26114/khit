@@ -4,7 +4,6 @@ import { useState } from "react";
 import { z } from "zod";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -24,11 +23,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Plus, Pencil, Trash2, Images } from "lucide-react";
+import { Plus, Images } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
 import { resolveImageSrc } from "@/lib/image";
 import { AdminMediaUploader } from "@/components/admin/media-uploader";
+import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 
 interface VariantItem {
   _id: string;
@@ -208,6 +208,26 @@ export default function MediaPage() {
     }
   };
 
+  const handleBulkDelete = async (rows: MediaItem[]) => {
+    if (rows.length === 0) return;
+    if (!confirm(`Delete ${rows.length} selected media item(s)?`)) return;
+
+    let deletedCount = 0;
+    for (const row of rows) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await removeMedia({ id: row._id as any });
+        deletedCount += 1;
+      } catch (error) {
+        notify.actionError(`delete media "${row.filePath}"`, error);
+      }
+    }
+
+    if (deletedCount > 0) {
+      notify.success(`${deletedCount} media item(s) deleted successfully`);
+    }
+  };
+
   if (mediaItems === undefined || variants === undefined) {
     return (
       <div>
@@ -223,69 +243,89 @@ export default function MediaPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className="mb-8">
         <h1 className="text-3xl font-bold">Media</h1>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Media
-        </Button>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {mediaItems.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <Images className="mx-auto h-12 w-12 mb-4 opacity-50" />
-              <p>No media found</p>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {(mediaItems as MediaItem[]).map((media) => (
-                <div
-                  key={media._id}
-                  className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded border overflow-hidden bg-muted flex items-center justify-center text-xs text-muted-foreground">
-                      {media.mediaType === "image" ? (
-                        <img
-                          src={resolveImageSrc(media.fileUrl || media.filePath)}
-                          alt={media.altText || "media"}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        "Video"
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold">{media.productName}</span>
-                        <Badge variant="outline">{media.mediaType}</Badge>
-                        {media.isPrimary && <Badge>Primary</Badge>}
-                        {!media.isActive && <Badge variant="secondary">Inactive</Badge>}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {media.variantSku} • {media.colorName}/{media.sizeName}
-                      </p>
-                      <p className="text-sm text-muted-foreground break-all">
-                        {media.filePath} • Order: {media.displayOrder}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(media)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(media._id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+      <AdminDataTable
+        data={mediaItems as MediaItem[]}
+        getRowId={(media) => media._id}
+        emptyTitle="Empty"
+        emptyDescription="No media found."
+        emptyIcon={Images}
+        searchPlaceholder="Filter media..."
+        toolbarActions={[
+          {
+            label: "Create Media",
+            icon: Plus,
+            onClick: openCreate,
+          },
+        ]}
+        rowActions={(media) => [
+          {
+            label: "Update",
+            onClick: () => openEdit(media),
+          },
+          {
+            label: "Delete",
+            destructive: true,
+            onClick: () => handleDelete(media._id),
+          },
+        ]}
+        onBulkDelete={handleBulkDelete}
+        bulkDeleteLabel="Delete selected media"
+        columns={[
+          {
+            id: "preview",
+            header: "Preview",
+            headerClassName: "w-[84px]",
+            searchable: false,
+            cell: (media) => (
+              <div className="h-12 w-12 rounded border overflow-hidden bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                {media.mediaType === "image" ? (
+                  <img
+                    src={resolveImageSrc(media.fileUrl || media.filePath)}
+                    alt={media.altText || "media"}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  "Video"
+                )}
+              </div>
+            ),
+          },
+          {
+            id: "product",
+            header: "Product / Variant",
+            searchAccessor: (media) =>
+              `${media.productName} ${media.variantSku} ${media.colorName} ${media.sizeName}`,
+            cell: (media) => (
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{media.productName}</span>
+                  <Badge variant="outline">{media.mediaType}</Badge>
+                  {media.isPrimary && <Badge>Primary</Badge>}
+                  {!media.isActive && <Badge variant="secondary">Inactive</Badge>}
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <div className="text-sm text-muted-foreground">
+                  {media.variantSku} • {media.colorName}/{media.sizeName}
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "filePath",
+            header: "Storage ID",
+            searchAccessor: (media) => media.filePath,
+            cell: (media) => (
+              <span className="max-w-[380px] truncate text-sm text-muted-foreground">
+                {media.filePath}
+              </span>
+            ),
+          },
+          { id: "order", header: "Order", cell: (media) => media.displayOrder },
+        ] satisfies AdminTableColumn<MediaItem>[]}
+      />
 
       <Dialog
         open={isDialogOpen}

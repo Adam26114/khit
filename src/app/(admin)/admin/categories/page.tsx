@@ -4,7 +4,6 @@ import { useState } from "react";
 import { z } from "zod";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,7 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Plus, Pencil, Trash2, FolderTree } from "lucide-react";
+import { Plus, FolderTree } from "lucide-react";
+import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
 
@@ -38,6 +38,8 @@ interface Category {
   createdAt: number;
   updatedAt: number;
 }
+
+type CategoryRow = Category & { level: number };
 
 const ROOT_CATEGORY_VALUE = "__root__";
 
@@ -144,48 +146,37 @@ export default function CategoriesPage() {
     }
   };
 
-  const buildCategoryTree = (parentId?: string, level = 0) => {
+  const handleBulkDelete = async (rows: CategoryRow[]) => {
+    if (rows.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${rows.length} selected categories?`)) return;
+
+    let deletedCount = 0;
+    for (const row of rows) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await removeCategory({ id: row._id as any });
+        deletedCount += 1;
+      } catch (error) {
+        notify.actionError(`delete category "${row.name}"`, error);
+      }
+    }
+
+    if (deletedCount > 0) {
+      notify.success(`${deletedCount} categories deleted successfully`);
+    }
+  };
+
+  const flattenCategoryTree = (parentId?: string, level = 0): CategoryRow[] => {
     const children = (categories as Category[] | undefined)?.filter((c: Category) =>
       parentId ? c.parentId === parentId : !c.parentId
     ) || [];
 
     return children
       .sort((a: Category, b: Category) => a.sortOrder - b.sortOrder)
-      .map((category: Category) => (
-        <div key={category._id}>
-          <div
-            className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
-            style={{ paddingLeft: `${level * 24 + 16}px` }}
-          >
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold">{category.name}</span>
-                <span className="text-sm text-muted-foreground">({category.slug})</span>
-              </div>
-              {category.description && (
-                <p className="text-sm text-muted-foreground mt-1">{category.description}</p>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  setEditingCategory(category);
-                  setFormErrors({});
-                  setIsAddDialogOpen(true);
-                }}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => handleDelete(category._id)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          {buildCategoryTree(category._id, level + 1)}
-        </div>
-      ));
+      .flatMap((category: Category) => [
+        { ...category, level },
+        ...flattenCategoryTree(category._id, level + 1),
+      ]);
   };
 
   if (categories === undefined) {
@@ -201,34 +192,87 @@ export default function CategoriesPage() {
     );
   }
 
+  const categoryRows = flattenCategoryTree();
+  const categoryById = new Map((categories as Category[]).map((category) => [category._id, category]));
+
+  const columns: AdminTableColumn<CategoryRow>[] = [
+    {
+      id: "name",
+      header: "Name",
+      searchAccessor: (category) =>
+        `${category.name} ${category.slug} ${category.description ?? ""}`,
+      cell: (category) => (
+        <div style={{ paddingLeft: `${category.level * 18}px` }}>
+          <div className="font-medium">{category.name}</div>
+          <div className="text-sm text-muted-foreground">
+            ({category.slug})
+            {category.description ? ` • ${category.description}` : ""}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "parent",
+      header: "Parent",
+      searchAccessor: (category) =>
+        category.parentId ? categoryById.get(category.parentId)?.name || "unknown" : "root",
+      cell: (category) => (
+        <span className="text-sm text-muted-foreground">
+          {category.parentId ? categoryById.get(category.parentId)?.name || "Unknown" : "Root"}
+        </span>
+      ),
+    },
+    {
+      id: "order",
+      header: "Order",
+      cell: (category) => category.sortOrder,
+      cellClassName: "text-sm",
+    },
+  ];
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className="mb-8">
         <h1 className="text-3xl font-bold">Categories</h1>
-        <Button
-          onClick={() => {
-            setEditingCategory(null);
-            setFormErrors({});
-            setIsAddDialogOpen(true);
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Category
-        </Button>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {categories.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <FolderTree className="mx-auto h-12 w-12 mb-4 opacity-50" />
-              <p>No categories found</p>
-            </div>
-          ) : (
-            <div className="divide-y">{buildCategoryTree()}</div>
-          )}
-        </CardContent>
-      </Card>
+      <AdminDataTable
+        data={categoryRows}
+        columns={columns}
+        getRowId={(category) => category._id}
+        emptyTitle="Empty"
+        emptyDescription="No categories found."
+        emptyIcon={FolderTree}
+        searchPlaceholder="Filter categories..."
+        toolbarActions={[
+          {
+            label: "Create Category",
+            icon: Plus,
+            onClick: () => {
+              setEditingCategory(null);
+              setFormErrors({});
+              setIsAddDialogOpen(true);
+            },
+          },
+        ]}
+        rowActions={(category) => [
+          {
+            label: "Update",
+            onClick: () => {
+              setEditingCategory(category);
+              setFormErrors({});
+              setIsAddDialogOpen(true);
+            },
+          },
+          {
+            label: "Delete",
+            destructive: true,
+            onClick: () => handleDelete(category._id),
+          },
+        ]}
+        onBulkDelete={handleBulkDelete}
+        bulkDeleteLabel="Delete selected categories"
+      />
 
       <Dialog
         open={isAddDialogOpen}

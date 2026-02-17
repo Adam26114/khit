@@ -4,7 +4,6 @@ import { useState } from "react";
 import { z } from "zod";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -17,7 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Plus, Pencil, Trash2, Ruler } from "lucide-react";
+import { Plus, Ruler } from "lucide-react";
+import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
 
@@ -138,6 +138,26 @@ export default function SizesPage() {
     }
   };
 
+  const handleBulkDelete = async (rows: SizeItem[]) => {
+    if (rows.length === 0) return;
+    if (!confirm(`Delete ${rows.length} selected sizes?`)) return;
+
+    let deletedCount = 0;
+    for (const row of rows) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await removeSize({ id: row._id as any });
+        deletedCount += 1;
+      } catch (error) {
+        notify.actionError(`delete size "${row.name}"`, error);
+      }
+    }
+
+    if (deletedCount > 0) {
+      notify.success(`${deletedCount} sizes deleted successfully`);
+    }
+  };
+
   if (sizes === undefined) {
     return (
       <div>
@@ -153,52 +173,63 @@ export default function SizesPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className="mb-8">
         <h1 className="text-3xl font-bold">Sizes</h1>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Size
-        </Button>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {sizes.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <Ruler className="mx-auto h-12 w-12 mb-4 opacity-50" />
-              <p>No sizes found</p>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {(sizes as SizeItem[]).map((size) => (
-                <div
-                  key={size._id}
-                  className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{size.name}</span>
-                      {!size.isActive && <Badge variant="secondary">Inactive</Badge>}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Category: {size.sizeCategory} • Order: {size.displayOrder}
-                      {size.nameMm ? ` • MM: ${size.nameMm}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(size)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(size._id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+      <AdminDataTable
+        data={sizes as SizeItem[]}
+        getRowId={(size) => size._id}
+        emptyTitle="Empty"
+        emptyDescription="No sizes found."
+        emptyIcon={Ruler}
+        searchPlaceholder="Filter sizes..."
+        toolbarActions={[
+          {
+            label: "Create Size",
+            icon: Plus,
+            onClick: openCreate,
+          },
+        ]}
+        rowActions={(size) => [
+          {
+            label: "Update",
+            onClick: () => openEdit(size),
+          },
+          {
+            label: "Delete",
+            destructive: true,
+            onClick: () => handleDelete(size._id),
+          },
+        ]}
+        onBulkDelete={handleBulkDelete}
+        bulkDeleteLabel="Delete selected sizes"
+        columns={[
+          {
+            id: "name",
+            header: "Size",
+            searchAccessor: (size) => `${size.name} ${size.nameMm ?? ""}`,
+            cell: (size) => (
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{size.name}</span>
+                  {!size.isActive && <Badge variant="secondary">Inactive</Badge>}
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                {size.nameMm && (
+                  <div className="text-sm text-muted-foreground">{size.nameMm}</div>
+                )}
+              </div>
+            ),
+          },
+          {
+            id: "category",
+            header: "Category",
+            searchAccessor: (size) => size.sizeCategory,
+            cell: (size) => size.sizeCategory,
+          },
+          { id: "order", header: "Order", cell: (size) => size.displayOrder },
+        ] satisfies AdminTableColumn<SizeItem>[]}
+      />
 
       <Dialog
         open={isDialogOpen}
