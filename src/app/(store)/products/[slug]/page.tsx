@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Heart,
@@ -19,6 +19,13 @@ import { ProductCard } from "@/components/store/product-card";
 import { useCart } from "@/providers/cart-provider";
 import { useQuery, api } from "@/lib/convex";
 import { resolveImageSrc } from "@/lib/image";
+import {
+  buildColorOptions,
+  buildSizeOptionsForColor,
+  getDisplayImagesForSelection,
+  getSelectedVariant,
+  normalizeProductVariants,
+} from "@/lib/product-variants";
 
 interface PageProps {
   params: { slug: string };
@@ -26,25 +33,90 @@ interface PageProps {
 
 export default function ProductPage({ params }: PageProps) {
   const { slug } = params;
-  
+
   // Fetch product from Convex
   const product = useQuery(
     api.products.getBySlug,
     slug ? { slug } : "skip"
   );
-  
+
   // Fetch featured products for "You May Also Like" section
   const relatedProducts = useQuery(api.products.getFeatured);
-  
-  const [selectedColor, setSelectedColor] = useState(product?.colors[0]);
+
+  const [selectedColorId, setSelectedColorId] = useState("");
   const [selectedSize, setSelectedSize] = useState<string>("");
   const [selectedImage, setSelectedImage] = useState(0);
+  const [isImageLoading, setIsImageLoading] = useState(false);
   const { addItem } = useCart();
-  
-  // Update selected color when product loads
-  if (product && !selectedColor) {
-    setSelectedColor(product.colors[0]);
-  }
+
+  const variants = useMemo(
+    () => normalizeProductVariants(product?.variants),
+    [product?.variants]
+  );
+  const colorOptions = useMemo(
+    () => buildColorOptions(variants, product?.colors ?? []),
+    [variants, product?.colors]
+  );
+  const sizeOptions = useMemo(
+    () => buildSizeOptionsForColor(variants, selectedColorId, product?.sizes ?? []),
+    [variants, selectedColorId, product?.sizes]
+  );
+  const selectedVariant = useMemo(
+    () => getSelectedVariant(variants, selectedColorId, selectedSize),
+    [variants, selectedColorId, selectedSize]
+  );
+  const displayImages = useMemo(
+    () =>
+      getDisplayImagesForSelection({
+        variants,
+        selectedColorId,
+        selectedSize,
+        productImages: product?.images ?? [],
+      }),
+    [variants, selectedColorId, selectedSize, product?.images]
+  );
+  const selectedColor = colorOptions.find((color) => color.id === selectedColorId);
+  const currentImageSrc = displayImages[selectedImage] || displayImages[0] || "";
+  const effectivePrice =
+    selectedVariant?.price ?? product?.salePrice ?? product?.price ?? 0;
+  const selectedStock = selectedVariant?.stock ?? selectedColor?.stock ?? 0;
+  const isSelectionOutOfStock =
+    variants.length > 0
+      ? selectedStock <= 0
+      : Boolean(product?.isOutOfStock);
+
+  useEffect(() => {
+    if (!colorOptions.length) {
+      setSelectedColorId("");
+      return;
+    }
+
+    const hasSelected = colorOptions.some((color) => color.id === selectedColorId);
+    if (!selectedColorId || !hasSelected) {
+      setSelectedColorId(colorOptions[0].id);
+    }
+  }, [colorOptions, selectedColorId]);
+
+  useEffect(() => {
+    if (!sizeOptions.length) {
+      setSelectedSize("");
+      return;
+    }
+
+    if (!selectedSize || !sizeOptions.includes(selectedSize)) {
+      setSelectedSize(sizeOptions[0]);
+    }
+  }, [sizeOptions, selectedSize]);
+
+  useEffect(() => {
+    if (selectedImage >= displayImages.length) {
+      setSelectedImage(0);
+    }
+  }, [selectedImage, displayImages.length]);
+
+  useEffect(() => {
+    setIsImageLoading(Boolean(currentImageSrc));
+  }, [currentImageSrc]);
 
   const handleAddToCart = () => {
     if (!product) return;
@@ -56,18 +128,25 @@ export default function ProductPage({ params }: PageProps) {
       alert("Please select a color");
       return;
     }
+    if (isSelectionOutOfStock) {
+      alert("Selected variant is out of stock");
+      return;
+    }
 
     addItem({
       productId: product._id,
       name: product.name,
       slug: product.slug,
-      price: product.price,
-      salePrice: product.salePrice,
+      price: effectivePrice,
+      salePrice: undefined,
       size: selectedSize,
       color: selectedColor.name,
       colorHex: selectedColor.hex,
       quantity: 1,
-      image: resolveImageSrc(product.images[0]),
+      image:
+        displayImages[selectedImage] ||
+        displayImages[0] ||
+        resolveImageSrc(product.images?.[0]),
     });
   };
 
@@ -109,10 +188,10 @@ export default function ProductPage({ params }: PageProps) {
   }
 
   // Calculate discount info (product is guaranteed to exist here)
-  const hasDiscount = product.salePrice && product.salePrice < product.price;
+  const hasDiscount = effectivePrice < product.price;
   const discountPercentage = hasDiscount
     ? Math.round(
-        ((product.price - (product.salePrice || 0)) / product.price) * 100
+        ((product.price - effectivePrice) / product.price) * 100
       )
     : 0;
 
@@ -140,11 +219,25 @@ export default function ProductPage({ params }: PageProps) {
         <div className="space-y-4">
           {/* Main Image */}
           <div className="relative aspect-[3/4] bg-gray-100 overflow-hidden">
-            <img
-              src={resolveImageSrc(product.images[selectedImage])}
-              alt={product.name}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
+            {displayImages.length > 0 ? (
+              <>
+                {isImageLoading && (
+                  <div className="absolute inset-0 animate-pulse bg-gray-200" />
+                )}
+                <img
+                  key={currentImageSrc}
+                  src={currentImageSrc}
+                  alt={product.name}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  onLoad={() => setIsImageLoading(false)}
+                  onError={() => setIsImageLoading(false)}
+                />
+              </>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-200 text-gray-500">
+                No image
+              </div>
+            )}
             {hasDiscount && (
               <div className="absolute top-4 left-4 bg-red-600 text-white text-sm font-medium px-3 py-1">
                 -{discountPercentage}%
@@ -153,25 +246,27 @@ export default function ProductPage({ params }: PageProps) {
           </div>
 
           {/* Thumbnail Grid */}
-          <div className="grid grid-cols-4 gap-2">
-            {product.images.map((image, index) => (
-              <button
-                key={index}
-                onClick={() => setSelectedImage(index)}
-                className={`relative aspect-square bg-gray-100 overflow-hidden border-2 ${
-                  selectedImage === index
-                    ? "border-black"
-                    : "border-transparent"
-                }`}
-              >
-                <img
-                  src={resolveImageSrc(image)}
-                  alt={`${product.name} - ${index + 1}`}
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              </button>
-            ))}
-          </div>
+          {displayImages.length > 1 && (
+            <div className="grid grid-cols-4 gap-2">
+              {displayImages.map((image, index) => (
+                <button
+                  key={`${image}-${index}`}
+                  onClick={() => {
+                    setSelectedImage(index);
+                  }}
+                  className={`relative aspect-square bg-gray-100 overflow-hidden border-2 ${
+                    selectedImage === index ? "border-black" : "border-transparent"
+                  }`}
+                >
+                  <img
+                    src={image}
+                    alt={`${product.name} - ${index + 1}`}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Product Info */}
@@ -185,7 +280,7 @@ export default function ProductPage({ params }: PageProps) {
             {hasDiscount ? (
               <>
                 <span className="text-2xl font-medium text-red-600">
-                  {product.salePrice?.toLocaleString()} MMK
+                  {effectivePrice.toLocaleString()} MMK
                 </span>
                 <span className="text-lg text-gray-400 line-through">
                   {product.price.toLocaleString()} MMK
@@ -207,12 +302,15 @@ export default function ProductPage({ params }: PageProps) {
               </span>
             </div>
             <div className="flex gap-3">
-              {product.colors.map((color) => (
+              {colorOptions.map((color) => (
                 <button
-                  key={color.name}
-                  onClick={() => setSelectedColor(color)}
+                  key={color.id}
+                  onClick={() => {
+                    setSelectedColorId(color.id);
+                    setSelectedImage(0);
+                  }}
                   className={`w-10 h-10 rounded-full border-2 ${
-                    selectedColor?.name === color.name
+                    selectedColorId === color.id
                       ? "border-black"
                       : "border-gray-300"
                   }`}
@@ -232,26 +330,36 @@ export default function ProductPage({ params }: PageProps) {
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {product.sizes.map((size) => (
-                <button
-                  key={size}
-                  onClick={() => setSelectedSize(size)}
-                  className={`w-12 h-12 border text-sm font-medium transition-colors ${
-                    selectedSize === size
-                      ? "border-black bg-black text-white"
-                      : "border-gray-300 hover:border-gray-400"
-                  }`}
-                >
-                  {size}
-                </button>
-              ))}
+              {sizeOptions.map((size) => {
+                const sizeVariant = getSelectedVariant(variants, selectedColorId, size);
+                const isSizeOutOfStock =
+                  variants.length > 0 ? (sizeVariant?.stock ?? 0) <= 0 : false;
+
+                return (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      setSelectedSize(size);
+                      setSelectedImage(0);
+                    }}
+                    disabled={isSizeOutOfStock}
+                    className={`w-12 h-12 border text-sm font-medium transition-colors ${
+                      selectedSize === size
+                        ? "border-black bg-black text-white"
+                        : "border-gray-300 hover:border-gray-400"
+                    } ${isSizeOutOfStock ? "cursor-not-allowed opacity-40" : ""}`}
+                  >
+                    {size}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Stock Indicator */}
-          {selectedColor && selectedColor.stock < 5 && selectedColor.stock > 0 && (
+          {selectedStock < 5 && selectedStock > 0 && (
             <p className="text-sm text-orange-600 mb-4">
-              Only {selectedColor.stock} left in stock
+              Only {selectedStock} left in stock
             </p>
           )}
 
@@ -260,10 +368,10 @@ export default function ProductPage({ params }: PageProps) {
             <Button
               size="lg"
               className="w-full"
-              disabled={product.isOutOfStock}
+              disabled={isSelectionOutOfStock}
               onClick={handleAddToCart}
             >
-              {product.isOutOfStock ? "Out of Stock" : "Add to Bag"}
+              {isSelectionOutOfStock ? "Out of Stock" : "Add to Bag"}
             </Button>
 
             <Button variant="outline" size="lg" className="w-full">

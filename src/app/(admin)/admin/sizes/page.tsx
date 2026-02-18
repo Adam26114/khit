@@ -7,7 +7,6 @@ import { api } from "@/../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -16,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Plus, Ruler } from "lucide-react";
+import { Pencil, Plus, Ruler, Trash2 } from "lucide-react";
 import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
@@ -50,7 +49,7 @@ export default function SizesPage() {
   const [isActive, setIsActive] = useState(true);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  const sizes = useQuery(api.sizes.getAll, { includeInactive: true });
+  const sizes = useQuery(api.sizes.getAll, {});
   const createSize = useMutation(api.sizes.create);
   const updateSize = useMutation(api.sizes.update);
   const removeSize = useMutation(api.sizes.remove);
@@ -194,10 +193,12 @@ export default function SizesPage() {
         rowActions={(size) => [
           {
             label: "Update",
+            icon: Pencil,
             onClick: () => openEdit(size),
           },
           {
             label: "Delete",
+            icon: Trash2,
             destructive: true,
             onClick: () => handleDelete(size._id),
           },
@@ -210,14 +211,9 @@ export default function SizesPage() {
             header: "Size",
             searchAccessor: (size) => `${size.name} ${size.nameMm ?? ""}`,
             cell: (size) => (
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{size.name}</span>
-                  {!size.isActive && <Badge variant="secondary">Inactive</Badge>}
-                </div>
-                {size.nameMm && (
-                  <div className="text-sm text-muted-foreground">{size.nameMm}</div>
-                )}
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{size.name}</span>
+                {size.nameMm ? <span className="text-sm text-muted-foreground">{size.nameMm}</span> : null}
               </div>
             ),
           },
@@ -228,6 +224,13 @@ export default function SizesPage() {
             cell: (size) => size.sizeCategory,
           },
           { id: "order", header: "Order", cell: (size) => size.displayOrder },
+          {
+            id: "active",
+            header: "Active",
+            defaultHidden: true,
+            searchAccessor: (size) => (size.isActive ? "active" : "inactive"),
+            cell: (size) => (size.isActive ? "Yes" : "No"),
+          },
         ] satisfies AdminTableColumn<SizeItem>[]}
       />
 
@@ -247,7 +250,7 @@ export default function SizesPage() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 items-start gap-4">
               <Field invalid={Boolean(formErrors.name)}>
                 <FieldLabel htmlFor="name">Size *</FieldLabel>
                 <Input
@@ -257,7 +260,9 @@ export default function SizesPage() {
                   aria-invalid={Boolean(formErrors.name)}
                   required
                 />
-                {formErrors.name && <FieldDescription>{formErrors.name}</FieldDescription>}
+                <FieldDescription className={!formErrors.name ? "invisible" : undefined}>
+                  {formErrors.name ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.nameMm)}>
                 <FieldLabel htmlFor="nameMm">Size (MM)</FieldLabel>
@@ -267,11 +272,13 @@ export default function SizesPage() {
                   defaultValue={editingSize?.nameMm}
                   aria-invalid={Boolean(formErrors.nameMm)}
                 />
-                {formErrors.nameMm && <FieldDescription>{formErrors.nameMm}</FieldDescription>}
+                <FieldDescription className={!formErrors.nameMm ? "invisible" : undefined}>
+                  {formErrors.nameMm ?? " "}
+                </FieldDescription>
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 items-start gap-4">
               <Field invalid={Boolean(formErrors.sizeCategory)}>
                 <FieldLabel htmlFor="sizeCategory">Category *</FieldLabel>
                 <Input
@@ -281,9 +288,9 @@ export default function SizesPage() {
                   aria-invalid={Boolean(formErrors.sizeCategory)}
                   required
                 />
-                {formErrors.sizeCategory && (
-                  <FieldDescription>{formErrors.sizeCategory}</FieldDescription>
-                )}
+                <FieldDescription className={!formErrors.sizeCategory ? "invisible" : undefined}>
+                  {formErrors.sizeCategory ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.displayOrder)}>
                 <FieldLabel htmlFor="displayOrder">Display Order</FieldLabel>
@@ -294,9 +301,9 @@ export default function SizesPage() {
                   defaultValue={editingSize?.displayOrder ?? 0}
                   aria-invalid={Boolean(formErrors.displayOrder)}
                 />
-                {formErrors.displayOrder && (
-                  <FieldDescription>{formErrors.displayOrder}</FieldDescription>
-                )}
+                <FieldDescription className={!formErrors.displayOrder ? "invisible" : undefined}>
+                  {formErrors.displayOrder ?? " "}
+                </FieldDescription>
               </Field>
             </div>
 

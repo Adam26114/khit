@@ -7,7 +7,6 @@ import { api } from "@/../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -16,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Plus, Palette } from "lucide-react";
+import { Palette, Pencil, Plus, Trash2 } from "lucide-react";
 import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
@@ -50,7 +49,7 @@ export default function ColorsPage() {
   const [hexCodeValue, setHexCodeValue] = useState("#111111");
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  const colors = useQuery(api.colors.getAll, { includeInactive: true });
+  const colors = useQuery(api.colors.getAll, {});
   const createColor = useMutation(api.colors.create);
   const updateColor = useMutation(api.colors.update);
   const removeColor = useMutation(api.colors.remove);
@@ -200,10 +199,12 @@ export default function ColorsPage() {
         rowActions={(color) => [
           {
             label: "Update",
+            icon: Pencil,
             onClick: () => openEdit(color),
           },
           {
             label: "Delete",
+            icon: Trash2,
             destructive: true,
             onClick: () => handleDelete(color._id),
           },
@@ -221,15 +222,8 @@ export default function ColorsPage() {
                   className="h-8 w-8 shrink-0 rounded border"
                   style={{ backgroundColor: color.hexCode }}
                 />
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{color.name}</span>
-                    {!color.isActive && <Badge variant="secondary">Inactive</Badge>}
-                  </div>
-                  {color.nameMm && (
-                    <div className="text-sm text-muted-foreground">{color.nameMm}</div>
-                  )}
-                </div>
+                <span className="font-medium">{color.name}</span>
+                {color.nameMm ? <span className="text-sm text-muted-foreground">{color.nameMm}</span> : null}
               </div>
             ),
           },
@@ -243,6 +237,13 @@ export default function ColorsPage() {
             id: "order",
             header: "Order",
             cell: (color) => color.displayOrder,
+          },
+          {
+            id: "active",
+            header: "Active",
+            defaultHidden: true,
+            searchAccessor: (color) => (color.isActive ? "active" : "inactive"),
+            cell: (color) => (color.isActive ? "Yes" : "No"),
           },
         ] satisfies AdminTableColumn<ColorItem>[]}
       />

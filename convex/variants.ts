@@ -49,17 +49,48 @@ export const getAll = query({
       variants = variants.slice(0, args.limit);
     }
 
+    const mediaCountByVariant = new Map<string, number>();
+    await Promise.all(
+      variants.map(async (variant) => {
+        const media = await ctx.db
+          .query("media")
+          .withIndex("by_variant", (q) => q.eq("variantId", variant._id))
+          .collect();
+
+        mediaCountByVariant.set(
+          String(variant._id),
+          media.filter((item) => item.isActive).length
+        );
+      })
+    );
+
+    const colorGroupVariantIds = new Map<string, string[]>();
+    for (const variant of variants) {
+      if (!variant.isActive) continue;
+      const groupKey = `${String(variant.productId)}:${String(variant.colorId)}`;
+      const existing = colorGroupVariantIds.get(groupKey) || [];
+      existing.push(String(variant._id));
+      colorGroupVariantIds.set(groupKey, existing);
+    }
+
     return await Promise.all(
       variants.map(async (variant) => {
-        const [product, color, size, media] = await Promise.all([
+        const [product, color, size] = await Promise.all([
           ctx.db.get(variant.productId),
           ctx.db.get(variant.colorId),
           ctx.db.get(variant.sizeId),
-          ctx.db
-            .query("media")
-            .withIndex("by_variant", (q) => q.eq("variantId", variant._id))
-            .collect(),
         ]);
+
+        const ownMediaCount = mediaCountByVariant.get(String(variant._id)) ?? 0;
+
+        const groupKey = `${String(variant.productId)}:${String(variant.colorId)}`;
+        const siblingVariantIds = colorGroupVariantIds.get(groupKey) ?? [];
+        const colorFallbackCount = siblingVariantIds.reduce((max, siblingId) => {
+          if (siblingId === String(variant._id)) return max;
+          return Math.max(max, mediaCountByVariant.get(siblingId) ?? 0);
+        }, 0);
+
+        const mediaCount = ownMediaCount > 0 ? ownMediaCount : colorFallbackCount;
 
         return {
           ...variant,
@@ -67,7 +98,7 @@ export const getAll = query({
           colorName: color?.name ?? "Unknown Color",
           colorHex: color?.hexCode ?? "#111111",
           sizeName: size?.name ?? "Unknown Size",
-          mediaCount: media.filter((item) => item.isActive).length,
+          mediaCount,
         };
       })
     );

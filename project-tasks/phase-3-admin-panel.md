@@ -1,225 +1,194 @@
 # Phase 3 - Admin Panel
 
 **Project:** Local Brand Khit - E-commerce Platform  
-**Date:** 2026-02-12  
-**Status:** ✅ Completed
+**Date Range:** 2026-02-12 to 2026-02-17  
+**Status:** ✅ Implemented (with some sections intentionally marked coming soon)
 
 ---
 
-## Overview
+## Phase 3 Goal
 
-Implemented a complete admin panel with dashboard analytics, order management, product management, category management, and role-based access control.
-
----
-
-## Features Implemented
-
-### 1. Admin Dashboard (`/admin`)
-**File:** `src/app/(admin)/admin/page.tsx`
-
-**Features:**
-- Real-time statistics cards:
-  - Orders Today (with count)
-  - Pending Orders (with count)
-  - Total Products (with count)
-  - Low Stock Items (with count)
-- Loading skeletons while fetching data
-- Quick action links
-
-**Backend Queries:**
-- `api.orders.getTodayStats` - Today's order statistics
-- `api.products.getCount` - Total product count
-- `api.products.getLowStock` - Low stock items (threshold: 5)
+Build an operational admin system for managing catalog and orders, with reusable UI patterns and role-protected routes.
 
 ---
 
-### 2. Order Management (`/admin/orders`)
-**File:** `src/app/(admin)/admin/orders/page.tsx`
+## Delivered Scope
 
-**Features:**
-- List all orders with search functionality
-- Filter orders by status (pending, confirmed, processing, shipped, delivered, cancelled)
-- Status color-coded badges
-- Quick status update dropdown
-- View order details in modal dialog
-- Shows customer info, items, totals, delivery method
+### 1. Admin Shell + Access Control
 
-**Backend Queries:**
-- `api.orders.getAll` - Get all orders with optional status filter
-- `api.orders.updateStatus` - Update order status
+Files:
 
----
-
-### 3. Product Management (`/admin/products`)
-**File:** `src/app/(admin)/admin/products/page.tsx`
-
-**Features:**
-- List all products with search
-- Add new product with form:
-  - Name, slug, description
-  - Price and sale price
-  - Stock quantity
-  - Category selection
-  - Size selection (XS-3XL)
-  - Image upload (Convex storage)
-  - Featured product toggle
-- Edit existing products
-- Soft delete products
-- Shows badges for featured, inactive, out of stock
-
-**Backend Queries:**
-- `api.products.getAll` - Get all products (including inactive)
-- `api.products.create` - Create new product
-- `api.products.update` - Update product
-- `api.products.remove` - Soft delete product
-- `api.products.generateUploadUrl` - Image upload
-- `api.categories.getActive` - Get categories for dropdown
-
----
-
-### 4. Category Management (`/admin/categories`)
-**File:** `src/app/(admin)/admin/categories/page.tsx`
-
-**Features:**
-- Hierarchical category tree display
-- Add new category with:
-  - Name and slug
-  - Description
-  - Parent category selection
-  - Sort order
-- Edit existing categories
-- Soft delete categories
-- Visual tree indentation
-
-**Backend Queries:**
-- `api.categories.getActive` - Get all active categories
-- `api.categories.create` - Create new category
-- `api.categories.update` - Update category
-- `api.categories.remove` - Soft delete category
-
----
-
-### 5. Admin Role Protection
-**Files:**
-- `src/components/admin/admin-guard.tsx`
 - `src/app/(admin)/layout.tsx`
+- `src/components/admin/admin-guard.tsx`
+- `src/components/admin/layout-shell.tsx`
+- `src/components/admin/sidebar.tsx`
+- `src/components/admin/header.tsx`
+
+Implemented:
+
+- Route protection for admin pages
+- Sidebar with `variant="inset"` and icon-collapse mode
+- Dark/light mode toggle in admin header
+- Session-aware user summary in header/footer
+
+---
+
+### 2. Reusable Admin Data Table
+
+File:
+
+- `src/components/admin/data-table.tsx`
+
+Implemented:
+
+- Filter/search input
+- Sortable columns
+- Column visibility menu
+- Row actions (three-dot dropdown)
+- Row selection checkboxes
+- Bulk actions menu (including bulk delete integration hook)
+- Pagination and rows-per-page selector
+- Empty state via `Empty` component
+- Shadow-free table card styling
+
+Used across admin pages for consistent behavior.
+
+---
+
+### 3. CRUD Modules Delivered
+
+#### Products (`/admin/products`)
+
+- Query/mutations: `api.products.getAll`, `create`, `update`, `remove`
+- Category and size selection
+- Featured toggle
+- Image upload through Convex upload URL
+- Form validation with zod + field-level error rendering
+
+#### Categories (`/admin/categories`)
+
+- Query/mutations: `api.categories.getActive`, `create`, `update`, `remove`
+- Parent category support
+- Slug validation
+
+#### Colors (`/admin/colors`)
+
+- Query/mutations: `api.colors.getAll`, `create`, `update`, `remove`
+- Hex code + bilingual name support
+
+#### Sizes (`/admin/sizes`)
+
+- Query/mutations: `api.sizes.getAll`, `create`, `update`, `remove`
+- Size category and ordering
+
+#### Variants (`/admin/variants`)
+
+- Query/mutations: `api.variants.getAll`, `create`, `update`, `remove`
+- Product + color + size variant combinations
+- SKU variant, stock, order, price override
+- Primary/active toggles
+
+#### Media (`/admin/media`)
+
+- Query/mutations: `api.media.getAll`, `create`, `update`, `remove`
+- Uploads using reusable `AdminMediaUploader`
+- Upload previews and remove support
+- Media assignment tied to variants
+
+---
+
+### 4. Variant Image Selection System (Phase 3 Extension)
+
+This became a critical follow-up inside Phase 3 and is now implemented.
+
+Backend behavior:
+
+- `convex/media.ts` create flow auto-links media to active sibling variants with same `(productId, colorId)` (all sizes for selected color).
+- `convex/products.ts` returns hydrated variant media and resolves image fallback chain.
+- `convex/variants.ts` shows effective media count using color-level fallback when needed.
+
+Frontend behavior:
+
+- Shared variant selection logic in `src/lib/product-variants.ts`
+- Product card and product detail page swap image based on selected color/size
+- Graceful fallback for variants without direct media
+
+Result:
+
+- Color swatch selection updates displayed image reliably
+- Missing-variant-image cases no longer hard-fail and can fallback cleanly
+
+---
+
+### 5. Form UX/Validation Standardization
+
+Implemented pattern across admin forms:
+
+- `zod` schema validation per page
+- `zodToFormErrors` mapping
+- `Field`, `FieldLabel`, `FieldDescription` usage for aligned error states
+- Sonner notifications through `src/lib/notifications.ts`
+
+Notification helpers include:
+
+- created / updated / deleted
+- validation errors
+- action failure with error details
+
+---
+
+### 6. Current "Coming Soon" Sections
+
+These routes exist but are not fully implemented CRUD modules yet:
+
+- `/admin/inventory`
+- `/admin/users`
+- `/admin/settings`
+
+They currently use basic placeholders/empty-state table patterns.
+
+---
+
+## Files/Areas Updated in Phase 3
+
+Frontend:
+
+- `src/app/(admin)/admin/*`
+- `src/components/admin/*`
+- `src/components/ui/*` (supporting components)
+- `src/lib/notifications.ts`
+- `src/lib/zod-errors.ts`
+- `src/lib/product-variants.ts`
+- `src/components/store/product-card.tsx`
+- `src/app/(store)/products/[slug]/page.tsx`
+
+Backend:
+
+- `convex/products.ts`
+- `convex/variants.ts`
+- `convex/media.ts`
+- `convex/colors.ts`
+- `convex/sizes.ts`
+- `convex/categories.ts`
+- `convex/orders.ts`
 - `convex/users.ts`
-
-**Features:**
-- `AdminGuard` component checks admin role
-- Redirects non-logged-in users to `/login`
-- Redirects non-admin users to store homepage
-- Shows loading spinner while checking permissions
-
-**Backend Queries:**
-- `api.users.isAdmin` - Check if current user is admin
-- `api.users.getCurrent` - Get current user info
+- `convex/schema.ts`
 
 ---
 
-## Backend Additions
+## Verification Snapshot
 
-### New Convex Queries/Mutations
+Latest checks run:
 
-**`convex/products.ts`:**
-- `getCount` - Get total active product count
-- `getLowStock` - Get products with low stock (default threshold: 5)
-- `getAll` - Get all products with pagination and includeInactive option
-
-**`convex/users.ts` (new file):**
-- `getByBetterAuthId` - Get user by Better Auth ID
-- `getCurrent` - Get current authenticated user
-- `getAll` - Get all users (admin only)
-- `updateRole` - Update user role (admin only)
-- `isAdmin` - Check if current user has admin role
+- `bunx tsc --noEmit` ✅
+- `bun run lint` ✅ (existing `no-img-element` warnings only)
 
 ---
 
-## Files Created/Modified
+## Phase 3 Completion Summary
 
-### New Files
-1. `src/app/(admin)/admin/page.tsx` - Dashboard with real data
-2. `src/app/(admin)/admin/orders/page.tsx` - Order management
-3. `src/app/(admin)/admin/products/page.tsx` - Product management
-4. `src/app/(admin)/admin/categories/page.tsx` - Category management
-5. `src/components/admin/admin-guard.tsx` - Admin protection component
-6. `convex/users.ts` - User queries and mutations
-
-### Modified Files
-1. `convex/products.ts` - Added `getCount`, `getLowStock`, `getAll` queries
-2. `src/app/(admin)/layout.tsx` - Wrapped with AdminGuard
-
----
-
-## UI Components Added
-
-**Installed via shadcn:**
-- `skeleton` - Loading states
-- `switch` - Toggle inputs
-- `textarea` - Multi-line text inputs
-
-**Installed via bun:**
-- `sonner` - Toast notifications
-
----
-
-## Verification
-
-```bash
-✅ bun lint - No ESLint warnings or errors
-✅ TypeScript - All type issues resolved (with proper type assertions)
-```
-
----
-
-## Admin Access
-
-**To access the admin panel:**
-1. User must be logged in
-2. User must have `role: "admin"` in the database
-
-**Setting up first admin:**
-1. Register a user account
-2. Manually update the user's role in Convex dashboard to "admin"
-3. Or use the `updateRole` mutation
-
----
-
-## Next Steps (Phase 4 Preview)
-
-### User Enhancements
-- Password reset flow
-- Email verification
-- Saved addresses
-- Wishlist functionality
-- Social login (Google)
-
-### Store Enhancements
-- Product search
-- Product reviews
-- Promo codes/discounts
-- Multiple images per product
-- Size guide modal
-
----
-
-## Notes
-
-- All admin mutations use soft delete (isActive: false) instead of hard delete
-- Image uploads use Convex storage with generated URLs
-- Low stock threshold is configurable (default: 5)
-- Admin routes are protected at the layout level
-- Toast notifications provide user feedback for all actions
-
----
-
-**Completed by:** AI Assistant  
-**Review Status:** Ready for testing  
-**Testing Checklist:**
-- [ ] Admin dashboard shows real statistics
-- [ ] Orders can be filtered and status updated
-- [ ] Products can be created, edited, and deleted
-- [ ] Categories can be created, edited, and deleted
-- [ ] Non-admin users are redirected from admin routes
-- [ ] Image upload works for products
-- [ ] All actions show success/error toasts
+- ✅ Admin architecture and access control
+- ✅ Core catalog CRUD (products/categories/colors/sizes/variants/media)
+- ✅ Reusable admin table and form patterns
+- ✅ Variant-aware media handling and storefront image selection
+- ⏳ Remaining admin modules (inventory/users/settings) to complete in next phase

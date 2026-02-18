@@ -15,9 +15,14 @@ function startsWithKnownUrl(value: string): boolean {
     value.startsWith("http://") ||
     value.startsWith("https://") ||
     value.startsWith("/") ||
+    value.startsWith("api/storage/") ||
     value.startsWith("data:") ||
     value.startsWith("blob:")
   );
+}
+
+function looksLikeStorageId(value: string): boolean {
+  return /^[a-z0-9]{20,}$/.test(value);
 }
 
 function sanitizeSkuPart(value: string): string {
@@ -75,16 +80,16 @@ async function resolveMediaUrl(
     return preferred;
   }
 
-  try {
-    const signed = await ctx.storage.getUrl(preferred as Id<"_storage">);
-    if (signed) {
-      return signed;
-    }
-  } catch {
-    // Fall back to original path for non-storage strings.
+  if (!looksLikeStorageId(preferred)) {
+    return "";
   }
 
-  return preferred;
+  try {
+    const signed = await ctx.storage.getUrl(preferred as Id<"_storage">);
+    return signed || "";
+  } catch {
+    return "";
+  }
 }
 
 async function resolveLegacyImages(ctx: ReadCtx, images: string[]): Promise<string[]> {
@@ -310,6 +315,7 @@ async function buildProductResponse(ctx: ReadCtx, product: Doc<"products">) {
 
     return {
       ...product,
+      isPublished: product.isPublished !== false,
       price: basePrice,
       basePrice,
       images: legacyImages,
@@ -340,31 +346,114 @@ async function buildProductResponse(ctx: ReadCtx, product: Doc<"products">) {
     }
   }
 
-  const variantViews = await Promise.all(
+  const mediaByVariant = new Map<string, Doc<"media">[]>();
+  await Promise.all(
     activeVariants.map(async (variant) => {
-      const medias = await ctx.db
+      const mediaList = await ctx.db
         .query("media")
         .withIndex("by_variant", (q) => q.eq("variantId", variant._id))
         .collect();
 
-      const mediaViews = await Promise.all(
-        medias
+      mediaByVariant.set(
+        String(variant._id),
+        mediaList
           .filter((media) => media.isActive)
-          .sort((a, b) => a.displayOrder - b.displayOrder)
-          .map(async (media) => ({
-            _id: media._id,
-            mediaType: media.mediaType,
-            filePath: media.filePath,
-            fileUrl: await resolveMediaUrl(ctx, media.filePath, media.fileUrl),
-            thumbnailUrl: media.thumbnailUrl,
-            altText: media.altText,
-            displayOrder: media.displayOrder,
-            isPrimary: media.isPrimary,
-          }))
+          .sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt - b.createdAt)
       );
+    })
+  );
+
+  const variantsByColor = new Map<string, Doc<"productVariants">[]>();
+  for (const variant of activeVariants) {
+    const colorKey = String(variant.colorId);
+    const list = variantsByColor.get(colorKey) || [];
+    list.push(variant);
+    variantsByColor.set(colorKey, list);
+  }
+  Array.from(variantsByColor.values()).forEach((list) => {
+    list.sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt - b.createdAt);
+  });
+
+  const mediaUrlCache = new Map<string, string>();
+  const toMediaView = async (media: Doc<"media">) => {
+    const cacheKey = `${media.filePath}|${media.fileUrl ?? ""}`;
+    let resolvedUrl = mediaUrlCache.get(cacheKey);
+    if (resolvedUrl === undefined) {
+      resolvedUrl = await resolveMediaUrl(ctx, media.filePath, media.fileUrl);
+      mediaUrlCache.set(cacheKey, resolvedUrl);
+    }
+
+    return {
+      _id: media._id,
+      mediaType: media.mediaType,
+      filePath: media.filePath,
+      fileUrl: resolvedUrl,
+      thumbnailUrl: media.thumbnailUrl,
+      altText: media.altText,
+      displayOrder: media.displayOrder,
+      isPrimary: media.isPrimary,
+    };
+  };
+
+  const getOwnMediaDocs = (variantId: Id<"productVariants">) =>
+    mediaByVariant.get(String(variantId)) ?? [];
+
+  const getSameColorFallbackDocs = (variant: Doc<"productVariants">) => {
+    const sameColorVariants = variantsByColor.get(String(variant.colorId)) ?? [];
+    for (const candidate of sameColorVariants) {
+      if (candidate._id === variant._id) continue;
+      const candidateMedia = getOwnMediaDocs(candidate._id);
+      if (candidateMedia.length > 0) {
+        return candidateMedia;
+      }
+    }
+    return [] as Doc<"media">[];
+  };
+
+  let globalFallbackDocs: Doc<"media">[] = [];
+  for (const candidate of activeVariants) {
+    const candidateMedia = getOwnMediaDocs(candidate._id);
+    if (candidateMedia.length > 0) {
+      globalFallbackDocs = candidateMedia;
+      break;
+    }
+  }
+
+  const legacyImageFallback =
+    globalFallbackDocs.length === 0 ? await resolveLegacyImages(ctx, product.images ?? []) : [];
+  const legacyMediaFallback = legacyImageFallback.map((image, index) => ({
+    _id: (`legacy-${String(product._id)}-${index}` as unknown) as Id<"media">,
+    mediaType: "image" as const,
+    filePath: image,
+    fileUrl: image,
+    thumbnailUrl: undefined,
+    altText: undefined,
+    displayOrder: index,
+    isPrimary: index === 0,
+  }));
+
+  const variantViews = await Promise.all(
+    activeVariants.map(async (variant) => {
+      const ownMediaDocs = getOwnMediaDocs(variant._id);
+      const sameColorFallbackDocs =
+        ownMediaDocs.length > 0 ? [] : getSameColorFallbackDocs(variant);
+      const effectiveMediaDocs =
+        ownMediaDocs.length > 0
+          ? ownMediaDocs
+          : sameColorFallbackDocs.length > 0
+            ? sameColorFallbackDocs
+            : globalFallbackDocs;
+
+      const mediaViews =
+        effectiveMediaDocs.length > 0
+          ? await Promise.all(effectiveMediaDocs.map((media) => toMediaView(media)))
+          : legacyMediaFallback;
 
       const color = colorCache.get(String(variant.colorId));
       const size = sizeCache.get(String(variant.sizeId));
+      const firstImage =
+        mediaViews.find((media) => media.mediaType === "image" && Boolean(media.fileUrl)) ??
+        null;
 
       return {
         _id: variant._id,
@@ -387,6 +476,8 @@ async function buildProductResponse(ctx: ReadCtx, product: Doc<"products">) {
         isPrimary: variant.isPrimary,
         price: variant.priceOverride ?? product.salePrice ?? basePrice,
         media: mediaViews,
+        imageUrl: firstImage?.fileUrl ?? "",
+        hasOwnMedia: ownMediaDocs.length > 0,
       };
     })
   );
@@ -394,15 +485,23 @@ async function buildProductResponse(ctx: ReadCtx, product: Doc<"products">) {
   const defaultVariant =
     variantViews.find((variant) => variant.isPrimary) || variantViews[0];
 
-  const images = (defaultVariant?.media || [])
+  let images = (defaultVariant?.media || [])
     .filter((media) => media.mediaType === "image")
     .map((media) => media.fileUrl)
     .filter(Boolean);
 
-  const imageRefs = (defaultVariant?.media || [])
+  if (images.length === 0 && legacyImageFallback.length > 0) {
+    images = legacyImageFallback;
+  }
+
+  let imageRefs = (defaultVariant?.media || [])
     .filter((media) => media.mediaType === "image")
     .map((media) => media.filePath)
     .filter(Boolean);
+
+  if (imageRefs.length === 0) {
+    imageRefs = product.images ?? [];
+  }
 
   const colorMap = new Map<
     string,
@@ -452,6 +551,7 @@ async function buildProductResponse(ctx: ReadCtx, product: Doc<"products">) {
 
   return {
     ...product,
+    isPublished: product.isPublished !== false,
     price: basePrice,
     basePrice,
     images,
@@ -489,7 +589,12 @@ export const getFeatured = query({
     const products = await ctx.db
       .query("products")
       .withIndex("by_featured", (q) => q.eq("isFeatured", true))
-      .filter((q) => q.eq(q.field("isActive"), true))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("isActive"), true),
+          q.neq(q.field("isPublished"), false)
+        )
+      )
       .take(12);
 
     return await Promise.all(products.map((product) => buildProductResponse(ctx, product)));
@@ -512,7 +617,12 @@ export const getByCategory = query({
     const products = await ctx.db
       .query("products")
       .withIndex("by_category", (q) => q.eq("categoryId", category._id))
-      .filter((q) => q.eq(q.field("isActive"), true))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("isActive"), true),
+          q.neq(q.field("isPublished"), false)
+        )
+      )
       .collect();
 
     return await Promise.all(products.map((product) => buildProductResponse(ctx, product)));
@@ -528,7 +638,7 @@ export const getBySlug = query({
       .withIndex("by_slug", (q) => q.eq("slug", slug))
       .unique();
 
-    if (!product || !product.isActive) {
+    if (!product || !product.isActive || product.isPublished === false) {
       return null;
     }
 
@@ -545,8 +655,10 @@ export const searchProducts = query({
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .collect();
 
+    const publishedProducts = products.filter((product) => product.isPublished !== false);
+
     const term = searchQuery.trim().toLowerCase();
-    const filtered = products.filter((product) => {
+    const filtered = publishedProducts.filter((product) => {
       const name = product.name.toLowerCase();
       const description = product.description.toLowerCase();
       const nameMm = (product.nameMm || "").toLowerCase();
@@ -588,6 +700,8 @@ export const filterProducts = query({
       .query("products")
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .collect();
+
+    products = products.filter((product) => product.isPublished !== false);
 
     if (args.categorySlug) {
       const category = await ctx.db
@@ -674,6 +788,7 @@ export const create = mutation({
     stock: v.optional(v.number()),
     sku: v.optional(v.string()),
     isFeatured: v.boolean(),
+    isPublished: v.optional(v.boolean()),
     careInstructions: v.optional(v.string()),
     sizeFit: v.optional(v.string()),
   },
@@ -696,6 +811,7 @@ export const create = mutation({
       basePrice: args.price,
       salePrice: args.salePrice,
       isFeatured: args.isFeatured,
+      isPublished: args.isPublished ?? true,
       isActive: true,
       careInstructions: args.careInstructions,
       sizeFit: args.sizeFit,
@@ -751,6 +867,7 @@ export const update = mutation({
       stock: v.optional(v.number()),
       isOutOfStock: v.optional(v.boolean()),
       isFeatured: v.optional(v.boolean()),
+      isPublished: v.optional(v.boolean()),
       isActive: v.optional(v.boolean()),
       careInstructions: v.optional(v.string()),
       sizeFit: v.optional(v.string()),
@@ -785,6 +902,7 @@ export const update = mutation({
       salePrice: updates.salePrice,
       categoryId: updates.categoryId,
       isFeatured: updates.isFeatured,
+      isPublished: updates.isPublished,
       isActive: updates.isActive,
       careInstructions: updates.careInstructions,
       sizeFit: updates.sizeFit,

@@ -65,6 +65,7 @@ export default defineSchema({
     basePrice: v.optional(v.number()),
     salePrice: v.optional(v.number()),
     isFeatured: v.boolean(),
+    isPublished: v.optional(v.boolean()),
     isActive: v.boolean(),
     careInstructions: v.optional(v.string()),
     sizeFit: v.optional(v.string()),

@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Package } from "lucide-react";
+import { Eye, Package } from "lucide-react";
 import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 
@@ -136,6 +136,7 @@ export default function OrdersPage() {
         rowActions={(order) => [
           {
             label: "View Details",
+            icon: Eye,
             onClick: () => setSelectedOrder(order._id),
           },
         ]}
