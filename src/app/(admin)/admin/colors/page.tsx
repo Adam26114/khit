@@ -6,8 +6,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -16,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Plus, Palette } from "lucide-react";
+import { Palette, Pencil, Plus, Trash2 } from "lucide-react";
 import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
@@ -27,7 +25,6 @@ interface ColorItem {
   nameMm?: string;
   hexCode: string;
   displayOrder: number;
-  isActive: boolean;
 }
 
 const colorSchema = z.object({
@@ -46,11 +43,10 @@ const colorSchema = z.object({
 export default function ColorsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingColor, setEditingColor] = useState<ColorItem | null>(null);
-  const [isActive, setIsActive] = useState(true);
   const [hexCodeValue, setHexCodeValue] = useState("#111111");
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  const colors = useQuery(api.colors.getAll, { includeInactive: true });
+  const colors = useQuery(api.colors.getAll, {});
   const createColor = useMutation(api.colors.create);
   const updateColor = useMutation(api.colors.update);
   const removeColor = useMutation(api.colors.remove);
@@ -58,14 +54,12 @@ export default function ColorsPage() {
   const resetDialogState = () => {
     setIsDialogOpen(false);
     setEditingColor(null);
-    setIsActive(true);
     setHexCodeValue("#111111");
     setFormErrors({});
   };
 
   const openCreate = () => {
     setEditingColor(null);
-    setIsActive(true);
     setHexCodeValue("#111111");
     setFormErrors({});
     setIsDialogOpen(true);
@@ -73,7 +67,6 @@ export default function ColorsPage() {
 
   const openEdit = (color: ColorItem) => {
     setEditingColor(color);
-    setIsActive(color.isActive);
     setHexCodeValue(color.hexCode || "#111111");
     setFormErrors({});
     setIsDialogOpen(true);
@@ -112,7 +105,6 @@ export default function ColorsPage() {
             nameMm: data.nameMm,
             hexCode: data.hexCode,
             displayOrder: data.displayOrder,
-            isActive,
           },
         });
         notify.updated("Color");
@@ -200,10 +192,12 @@ export default function ColorsPage() {
         rowActions={(color) => [
           {
             label: "Update",
+            icon: Pencil,
             onClick: () => openEdit(color),
           },
           {
             label: "Delete",
+            icon: Trash2,
             destructive: true,
             onClick: () => handleDelete(color._id),
           },
@@ -221,15 +215,8 @@ export default function ColorsPage() {
                   className="h-8 w-8 shrink-0 rounded border"
                   style={{ backgroundColor: color.hexCode }}
                 />
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{color.name}</span>
-                    {!color.isActive && <Badge variant="secondary">Inactive</Badge>}
-                  </div>
-                  {color.nameMm && (
-                    <div className="text-sm text-muted-foreground">{color.nameMm}</div>
-                  )}
-                </div>
+                <span className="font-medium">{color.name}</span>
+                {color.nameMm ? <span className="text-sm text-muted-foreground">{color.nameMm}</span> : null}
               </div>
             ),
           },
@@ -337,13 +324,6 @@ export default function ColorsPage() {
                 </FieldDescription>
               </Field>
             </div>
-
-            {editingColor && (
-              <div className="flex items-center space-x-2">
-                <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
-                <FieldLabel htmlFor="isActive">Active</FieldLabel>
-              </div>
-            )}
 
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={resetDialogState}>

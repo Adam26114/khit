@@ -1,27 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { type MouseEvent, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import { CaretRight, Heart } from "@/components/solar-icons";
 import { Button } from "@/components/ui/button";
-import { resolveImageSrc } from "@/lib/image";
-
-interface ProductColor {
-  name: string;
-  hex: string;
-  stock: number;
-}
+import {
+  buildColorOptions,
+  buildSizeOptionsForColor,
+  getDisplayImagesForSelection,
+  getSelectedVariant,
+  normalizeProductVariants,
+  type ProductColorLike,
+  type ProductVariantLike,
+} from "@/lib/product-variants";
 
 interface Product {
   _id: string;
   name: string;
   slug: string;
+  categoryName?: string;
   price: number;
   salePrice?: number;
   images: string[];
   sizes: string[];
-  colors: ProductColor[];
+  colors: ProductColorLike[];
   isOutOfStock: boolean;
+  variants?: ProductVariantLike[];
 }
 
 interface ProductCardProps {
@@ -29,24 +33,92 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product }: ProductCardProps) {
+  const variants = useMemo(
+    () => normalizeProductVariants(product.variants),
+    [product.variants]
+  );
+  const colorOptions = useMemo(
+    () => buildColorOptions(variants, product.colors),
+    [variants, product.colors]
+  );
+
   const [isHovered, setIsHovered] = useState(false);
-  const [selectedColor, setSelectedColor] = useState(product.colors[0]?.name ?? "");
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0] ?? "");
+  const [selectedColorId, setSelectedColorId] = useState(
+    colorOptions[0]?.id ?? ""
+  );
+  const [selectedSize, setSelectedSize] = useState("");
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const resolvedImages = product.images
-    .map((image) => resolveImageSrc(image))
-    .filter((image): image is string => Boolean(image));
+  const [isWishlisted, setIsWishlisted] = useState(false);
+
+  useEffect(() => {
+    if (!colorOptions.length) {
+      setSelectedColorId("");
+      return;
+    }
+
+    const hasSelected = colorOptions.some((color) => color.id === selectedColorId);
+    if (!selectedColorId || !hasSelected) {
+      setSelectedColorId(colorOptions[0].id);
+    }
+  }, [colorOptions, selectedColorId]);
+
+  const sizeOptions = useMemo(
+    () => buildSizeOptionsForColor(variants, selectedColorId, product.sizes),
+    [variants, selectedColorId, product.sizes]
+  );
+
+  useEffect(() => {
+    if (!sizeOptions.length) {
+      setSelectedSize("");
+      return;
+    }
+
+    if (!selectedSize || !sizeOptions.includes(selectedSize)) {
+      setSelectedSize(sizeOptions[0]);
+    }
+  }, [sizeOptions, selectedSize]);
+
+  const selectedVariant = useMemo(
+    () => getSelectedVariant(variants, selectedColorId, selectedSize),
+    [variants, selectedColorId, selectedSize]
+  );
+
+  const resolvedImages = useMemo(
+    () =>
+      getDisplayImagesForSelection({
+        variants,
+        selectedColorId,
+        selectedSize,
+        productImages: product.images,
+      }),
+    [variants, selectedColorId, selectedSize, product.images]
+  );
+
+  useEffect(() => {
+    if (currentImageIndex >= resolvedImages.length) {
+      setCurrentImageIndex(0);
+    }
+  }, [currentImageIndex, resolvedImages.length]);
+
   const currentImage = resolvedImages[currentImageIndex] || "";
   const hasMultipleImages = resolvedImages.length > 1;
+  const selectedColor = colorOptions.find((color) => color.id === selectedColorId);
+  const categoryLabel = (product.categoryName || "ESSENTIALS").toUpperCase();
 
-  const hasDiscount = product.salePrice && product.salePrice < product.price;
+  const effectivePrice =
+    selectedVariant?.price ?? product.salePrice ?? product.price;
+  const hasDiscount = effectivePrice < product.price;
   const discountPercentage = hasDiscount
     ? Math.round(
-        ((product.price - (product.salePrice || 0)) / product.price) * 100
+        ((product.price - effectivePrice) / product.price) * 100
       )
     : 0;
-  const visibleSizes = product.sizes.slice(0, 6);
-  const visibleColors = product.colors.slice(0, 5);
+
+  const visibleSizes = sizeOptions.slice(0, 6);
+  const visibleColors = colorOptions.slice(0, 5);
+  const selectedStock = selectedVariant?.stock ?? selectedColor?.stock ?? 0;
+  const isCurrentSelectionOutOfStock =
+    variants.length > 0 ? selectedStock <= 0 : product.isOutOfStock;
 
   const goToNextImage = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -66,27 +138,22 @@ export function ProductCard({ product }: ProductCardProps) {
 
   const handleColorClick = (
     e: MouseEvent<HTMLButtonElement>,
-    colorName: string,
-    colorIndex: number
+    colorId: string
   ) => {
     e.preventDefault();
     e.stopPropagation();
-    setSelectedColor(colorName);
-
-    if (resolvedImages.length > 0) {
-      const imageIndex = Math.min(colorIndex, resolvedImages.length - 1);
-      setCurrentImageIndex(imageIndex);
-    }
+    setSelectedColorId(colorId);
+    setCurrentImageIndex(0);
   };
 
   return (
-    <div
-      className="group"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <div>
       {/* Image Container */}
-      <div className="relative aspect-[3/4] bg-gray-100 overflow-hidden mb-4">
+      <div
+        className="group relative mb-4 aspect-[3/4] overflow-hidden bg-gray-100"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
         <Link href={`/products/${product.slug}`}>
           {currentImage ? (
             <img
@@ -128,37 +195,45 @@ export function ProductCard({ product }: ProductCardProps) {
         )}
 
         {/* Hover Size Selector */}
-        {!product.isOutOfStock && visibleSizes.length > 0 && (
+        {!isCurrentSelectionOutOfStock && visibleSizes.length > 0 && (
           <div
-            className={`absolute bottom-0 left-0 right-0 z-20 bg-white/90 px-2 py-2 transition ${
+            className={`absolute bottom-0 left-0 right-0 z-20 bg-gray-100/85 px-3 py-3 backdrop-blur-[1px] transition ${
               isHovered ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
           >
-            <div className="flex flex-wrap gap-1">
-              {visibleSizes.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setSelectedSize(size);
-                  }}
-                  className={`min-w-8 border px-2 py-1 text-[11px] font-medium transition-colors ${
-                    selectedSize === size
-                      ? "border-black bg-black text-white"
-                      : "border-gray-300 bg-white text-black hover:border-black"
-                  }`}
-                >
-                  {size}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {visibleSizes.map((size) => {
+                const variantForSize = getSelectedVariant(variants, selectedColorId, size);
+                const isSizeOutOfStock =
+                  variants.length > 0 ? (variantForSize?.stock ?? 0) <= 0 : false;
+
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    disabled={isSizeOutOfStock}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelectedSize(size);
+                      setCurrentImageIndex(0);
+                    }}
+                    className={`min-w-10 border border-transparent px-3 py-2 text-[13px] font-medium leading-none text-gray-700 transition-colors ${
+                      selectedSize === size
+                        ? "bg-[#e5e5e5] text-gray-900"
+                        : "bg-transparent hover:bg-gray-200/80"
+                    } ${isSizeOutOfStock ? "cursor-not-allowed opacity-40" : ""}`}
+                  >
+                    {size}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
         {/* Out of Stock Overlay */}
-        {product.isOutOfStock && (
+        {isCurrentSelectionOutOfStock && (
           <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
             <span className="text-sm font-medium tracking-wide text-gray-900">
               SOLD OUT
@@ -167,7 +242,7 @@ export function ProductCard({ product }: ProductCardProps) {
         )}
 
         {/* Discount Badge */}
-        {hasDiscount && !product.isOutOfStock && (
+        {hasDiscount && !isCurrentSelectionOutOfStock && (
           <div className="absolute top-3 left-3 bg-red-600 text-white text-xs font-medium px-2 py-1">
             -{discountPercentage}%
           </div>
@@ -175,9 +250,33 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
 
       {/* Product Info */}
-      <div className="space-y-2">
+      <div className="space-y-2.5">
+        <div className="flex items-start justify-between gap-3">
+          <p className="pt-0.5 text-[10px] uppercase tracking-wide text-gray-600">
+            {categoryLabel}
+          </p>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 rounded-none p-0 text-gray-700 hover:bg-transparent hover:text-black"
+            aria-label="Add to wishlist"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsWishlisted((prev) => !prev);
+            }}
+          >
+            <Heart
+              weight={isWishlisted ? "fill" : "duotone"}
+              className={`h-5 w-5 transition-all ${
+                isWishlisted ? "text-gray-900" : "text-gray-700"
+              }`}
+            />
+          </Button>
+        </div>
+
         <Link href={`/products/${product.slug}`}>
-          <h3 className="text-sm font-medium text-gray-900 line-clamp-1 hover:text-gray-600 transition-colors">
+          <h3 className="line-clamp-2 text-[14px] font-medium leading-6 text-gray-900 transition-colors hover:text-gray-600">
             {product.name}
           </h3>
         </Link>
@@ -185,51 +284,48 @@ export function ProductCard({ product }: ProductCardProps) {
         <div className="flex items-center gap-2">
           {hasDiscount ? (
             <>
-              <span className="text-sm font-medium text-red-600">
-                {product.salePrice?.toLocaleString()} MMK
-              </span>
-              <span className="text-sm text-gray-400 line-through">
+              <span className="text-[14px] text-gray-400 line-through">
                 {product.price.toLocaleString()} MMK
+              </span>
+              <span className="text-[14px] font-semibold text-red-600">
+                {effectivePrice.toLocaleString()} MMK
               </span>
             </>
           ) : (
-            <span className="text-sm font-medium text-gray-900">
+            <span className="text-[14px] font-medium text-gray-900">
               {product.price.toLocaleString()} MMK
             </span>
           )}
         </div>
 
-        {/* Colors + Wishlist */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {visibleColors.map((color, index) => (
+        {/* Colors */}
+        <div className="flex items-end gap-2">
+          {visibleColors.map((color) => {
+            const isSelected = selectedColorId === color.id;
+            return (
               <button
-                key={color.name}
+                key={color.id}
                 type="button"
-                onClick={(e) => handleColorClick(e, color.name, index)}
-                className={`h-5 w-5 border transition ${
-                  selectedColor === color.name
-                    ? "border-black ring-1 ring-black"
-                    : "border-gray-300 hover:border-black"
-                }`}
-                style={{ backgroundColor: color.hex }}
+                onClick={(e) => handleColorClick(e, color.id)}
+                className="flex flex-col items-center gap-1"
                 title={color.name}
-              />
-            ))}
-            {product.colors.length > visibleColors.length && (
-              <span className="text-xs text-gray-600">
-                +{product.colors.length - visibleColors.length}
-              </span>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 hover:bg-transparent"
-            aria-label="Add to wishlist"
-          >
-            <Heart size={16} />
-          </Button>
+              >
+                <span
+                  className="h-6 w-6 rounded-full border border-black/10"
+                  style={{ backgroundColor: color.hex }}
+                />
+                <span
+                  className="h-0.5 w-5 transition-colors"
+                  style={{ backgroundColor: isSelected ? color.hex : "transparent" }}
+                />
+              </button>
+            );
+          })}
+          {colorOptions.length > visibleColors.length && (
+            <span className="pb-1 text-xs text-gray-600">
+              +{colorOptions.length - visibleColors.length}
+            </span>
+          )}
         </div>
       </div>
     </div>

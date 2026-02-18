@@ -365,6 +365,23 @@ export function AdminDataTable<T>({
 
   const showToolbarMenu = toolbarActions.length > 0 || effectiveBulkActions.length > 0;
 
+  const runToolbarAction = async (action: AdminToolbarAction) => {
+    if (action.disabled) return;
+    await action.onClick();
+  };
+
+  const runBulkAction = async (action: AdminBulkAction<T>) => {
+    const disabled = action.disabled || selectedRows.length === 0;
+    if (disabled) return;
+    await action.onClick(selectedRows);
+    setSelectedRowIds(new Set());
+  };
+
+  const runRowAction = async (action: AdminRowAction<T>, row: T) => {
+    if (action.disabled) return;
+    await action.onClick(row);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -420,7 +437,10 @@ export function AdminDataTable<T>({
                       return (
                         <DropdownMenuItem
                           key={action.label}
-                          onSelect={() => action.onClick()}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            runToolbarAction(action);
+                          }}
                           disabled={action.disabled}
                           className={action.destructive ? "text-destructive focus:text-destructive" : ""}
                         >
@@ -442,10 +462,10 @@ export function AdminDataTable<T>({
                       return (
                         <DropdownMenuItem
                           key={action.label}
-                          onSelect={() => {
+                          onSelect={(event) => {
+                            event.preventDefault();
                             if (disabled) return;
-                            void action.onClick(selectedRows);
-                            setSelectedRowIds(new Set());
+                            runBulkAction(action);
                           }}
                           disabled={disabled}
                           className={action.destructive ? "text-destructive focus:text-destructive" : ""}
@@ -494,7 +514,7 @@ export function AdminDataTable<T>({
                       <Button
                         variant="ghost"
                         onClick={() => toggleSort(column)}
-                        className="h-8 px-2"
+                        className="h-8 -ml-2 justify-start px-2 font-medium text-foreground"
                       >
                         <span>{column.header}</span>
                         {sortIcon(column)}
@@ -563,7 +583,10 @@ export function AdminDataTable<T>({
                                 return (
                                   <DropdownMenuItem
                                     key={action.label}
-                                    onSelect={() => action.onClick(row)}
+                                    onSelect={(event) => {
+                                      event.preventDefault();
+                                      runRowAction(action, row);
+                                    }}
                                     disabled={action.disabled}
                                     className={action.destructive ? "text-destructive focus:text-destructive" : ""}
                                   >

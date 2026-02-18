@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Plus, FolderTree } from "lucide-react";
+import { FolderTree, Pencil, Plus, Trash2 } from "lucide-react";
 import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
@@ -202,14 +202,17 @@ export default function CategoriesPage() {
       searchAccessor: (category) =>
         `${category.name} ${category.slug} ${category.description ?? ""}`,
       cell: (category) => (
-        <div style={{ paddingLeft: `${category.level * 18}px` }}>
-          <div className="font-medium">{category.name}</div>
-          <div className="text-sm text-muted-foreground">
-            ({category.slug})
-            {category.description ? ` • ${category.description}` : ""}
-          </div>
+        <div style={{ paddingLeft: `${category.level * 18}px` }} className="font-medium">
+          {category.name}
         </div>
       ),
+    },
+    {
+      id: "slug",
+      header: "Slug",
+      defaultHidden: true,
+      searchAccessor: (category) => category.slug,
+      cell: (category) => <span className="text-sm text-muted-foreground">{category.slug}</span>,
     },
     {
       id: "parent",
@@ -258,6 +261,7 @@ export default function CategoriesPage() {
         rowActions={(category) => [
           {
             label: "Update",
+            icon: Pencil,
             onClick: () => {
               setEditingCategory(category);
               setFormErrors({});
@@ -266,6 +270,7 @@ export default function CategoriesPage() {
           },
           {
             label: "Delete",
+            icon: Trash2,
             destructive: true,
             onClick: () => handleDelete(category._id),
           },

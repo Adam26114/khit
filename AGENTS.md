@@ -1,204 +1,157 @@
 # AGENTS.md
 
-This guide helps AI coding assistants work effectively in this repository.
+Assistant guide for this repository. Keep this file in sync with actual code behavior.
 
-## Project Overview
+## Project Snapshot
 
-**Local Brand Khit** - A Next.js 14 e-commerce application for a Myanmar local menswear fashion brand. Built with TypeScript, Tailwind CSS, shadcn/ui, Convex (backend), and Better Auth.
+**Local Brand Khit** is a Next.js + Convex e-commerce app with storefront and admin panel.
 
-- **Package Manager**: Bun (not npm/yarn/pnpm)
-- **Framework**: Next.js 14.2.35 with App Router
-- **Backend**: Convex (serverless real-time database)
-- **Auth**: Better Auth with `@convex-dev/better-auth`
-- **UI**: Radix UI primitives + shadcn/ui
-- **i18n**: next-intl (English + Burmese)
+- Package manager: **Bun only**
+- Frontend: Next.js 14 (App Router), Tailwind, shadcn/ui
+- Backend: Convex
+- Auth: Better Auth + `@convex-dev/better-auth`
+- Validation: Zod
+- Notifications: Sonner
+- Icons: `@solar-icons/react` (storefront wrapper) + Lucide (admin/ui)
 
-## Build/Lint/Test Commands
+## Run Commands
 
 ```bash
-# Development
-bun dev                   # Start Next.js dev server
-bunx convex dev          # Start Convex dev server (separate terminal)
+# app
+bun run dev
 
-# Build & Deploy
-bun build                # Production build
-bun start                # Start production server
+# convex (separate terminal)
+bunx convex dev
 
-# Code Quality
-bun lint                 # Run ESLint (Next.js config)
-bunx tsc --noEmit        # Type check without emitting files
+# quality
+bun run lint
+bunx tsc --noEmit
+
+# production
+bun run build
+bun run start
 ```
 
-**Testing**: No test framework is currently configured.
+No automated test suite is configured yet.
 
-**Note**: Always use `bun` for package operations, not npm/yarn.
+## High-Level Structure
 
-## Project Structure
-
-```
-├── src/
-│   ├── app/                    # Next.js App Router
-│   │   ├── (admin)/            # Admin dashboard route group
-│   │   └── (store)/            # Storefront route group
-│   ├── components/
-│   │   ├── ui/                 # shadcn/ui components
-│   │   ├── admin/              # Admin-specific components
-│   │   └── store/              # Store-specific components
-│   ├── hooks/                  # React hooks
-│   ├── lib/                    # Utilities (cn, convex, storage)
-│   ├── providers/              # React context providers
-│   └── i18n/                   # Internationalization
-├── convex/                     # Convex backend
-│   ├── schema.ts               # Database schema
-│   ├── auth/                   # Auth configuration
-│   ├── categories.ts           # Categories mutations/queries
-│   ├── orders.ts               # Orders mutations/queries
-│   └── products.ts             # Products mutations/queries
-└── public/                     # Static assets
-```
-
-## Code Style Guidelines
-
-### TypeScript
-
-- **Strict mode enabled** - Always type function parameters and return values
-- Use `interface` for component props (allows extends)
-- Use `type` for complex unions or mapped types
-- Prefer explicit return types for public functions
-- Use absolute imports with `@/` alias
-
-### Import Ordering
-
-```typescript
-// 1. React  2. External libs  3. Internal utilities  4. Components  5. Styles
-import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import "./globals.css";
+```text
+src/
+  app/
+    (store)/...
+    (admin)/admin/...
+    api/auth/[...all]/route.ts
+    api/storage/[id]/route.ts
+  components/
+    admin/
+    store/
+    ui/
+    solar-icons.tsx
+  lib/
+    convex.ts
+    image.ts
+    notifications.ts
+    product-variants.ts
+    storage.ts
+    zod-errors.ts
+convex/
+  schema.ts
+  products.ts
+  variants.ts
+  media.ts
+  colors.ts
+  sizes.ts
+  categories.ts
+  orders.ts
+  users.ts
 ```
 
-### Component Patterns
+## Current Data Model (Important)
 
-```typescript
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean;
-}
+Convex schema is variant-based:
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
-    return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        {...props}
-      />
-    );
-  }
-);
-Button.displayName = "Button";
+- `products`
+- `productVariants` (product + color + size)
+- `colors`
+- `sizes`
+- `media` (linked to `variantId`)
+- `cartItems` (linked to `variantId`)
+- `wishlistItems` (linked to `variantId`)
 
-export { Button, buttonVariants };
-```
+Legacy fields still exist on `products` for compatibility (`price`, `images`, `sizes`, `colors`, `stock`).
 
-### Naming Conventions
+## Variant Media Rules (Critical)
 
-- Components: PascalCase (e.g., `UserProfile`)
-- Component files: kebab-case (e.g., `user-profile.tsx`)
-- Hooks: use + PascalCase (e.g., `useToast`)
-- Hook files: kebab-case (e.g., `use-toast.ts`)
-- Utilities: camelCase (e.g., `cn`, `formatDate`)
-- Props interfaces: `[Component]Props` (e.g., `ButtonProps`)
-- Convex files: camelCase (e.g., `categories.ts`)
+- Media upload in admin currently auto-links across all active variants with same `(productId, colorId)` when created from one variant.
+- Product hydration (`convex/products.ts`) provides fallback chain:
+  1. own variant media
+  2. same-color sibling media
+  3. first available media in product variants
+  4. legacy product images
+- Frontend image selection is centralized in `src/lib/product-variants.ts`.
 
-### Styling (Tailwind CSS)
+When changing image behavior, update both:
+- backend hydration (`convex/products.ts`)
+- frontend selection utils (`src/lib/product-variants.ts`)
 
-- Always use `cn()` utility from `@/lib/utils` for class merging
-- Follow shadcn/ui patterns using `class-variance-authority` for variants
-- Use CSS variables from `globals.css` (HSL format)
-- Semantic colors: `primary`, `secondary`, `muted`, `accent`, `destructive`, `card`, `popover`
-- Pattern: `cn(baseClasses, variantClasses, className)`
+## Admin UI Conventions
 
-### Error Handling
+- Shell/layout: `src/components/admin/layout-shell.tsx`, `src/components/admin/sidebar.tsx`, `src/components/admin/header.tsx`
+- Sidebar mode: inset + icon collapse
+- Theme: localStorage key `khit-admin-theme`
+- Reusable table: `src/components/admin/data-table.tsx`
+  - search
+  - sort
+  - column visibility
+  - pagination + rows/page
+  - row selection + bulk actions
+  - row actions menu
+  - empty state component
 
-```typescript
-// Validation with Zod
-import { z } from "zod";
+## Form + Validation Conventions
 
-const schema = z.object({
-  email: z.string().email("Invalid email"),
-  password: z.string().min(8, "Too short"),
-});
+Use this pattern across admin pages:
 
-type FormData = z.infer<typeof schema>;
+- Zod schema per page
+- `zodToFormErrors` from `src/lib/zod-errors.ts`
+- Field wrappers from `src/components/ui/field`
+- Keep field alignment stable by always rendering `FieldDescription` (use invisible placeholder when no error)
+- Notify through `notify` helper from `src/lib/notifications.ts`
 
-// Async error handling
-async function fetchData() {
-  try {
-    return await api.query();
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error("Fetch failed:", error.message);
-    }
-    throw error;
-  }
-}
-```
+## Media Upload Conventions
 
-### Form Handling
+- Reusable uploader: `src/components/admin/media-uploader.tsx`
+- Image compression to WebP at upload (`compressImageToWebP`, target up to 1920x1080)
+- Use `resolveImageSrc` for rendering storage IDs safely
+- Storage proxy route: `/api/storage/[id]` -> `products:getStorageUrl`
 
-- Use `react-hook-form` with Zod resolver (`@hookform/resolvers/zod`)
-- Wrap with shadcn/ui Form components (Form, FormField, FormItem, FormControl, FormMessage)
+## Environment Notes
 
-### Internationalization
+Do not commit `.env.local`.
 
-- Uses `next-intl` for i18n routing and translations
-- Messages stored in `src/i18n/messages/{en,my}.json`
-- Use `useTranslations()` hook for all user-facing strings
-- Never hardcode UI text - always use translation keys
+Important variables:
 
-### Database (Convex)
+- `NEXT_PUBLIC_CONVEX_URL`
+- `CONVEX_DEPLOYMENT`
+- `NEXT_PUBLIC_CONVEX_SITE_URL` (or `CONVEX_SITE_URL`) for Better Auth helper
+- `BETTER_AUTH_SECRET`
+- `INITIAL_ADMIN_EMAIL` (comma-separated supported)
 
-- Schema defined in `convex/schema.ts`
-- Mutations/queries in `convex/*.ts` files
-- Use generated types from `convex/_generated/api`
-- Pattern: `useQuery(api.{file}.{function})`
+## Assistant Editing Rules (Repo-Specific)
 
-### Environment Variables
-
-- Development: `.env.local` (gitignored, never commit)
-- Template: `.env.local.example`
-- Common vars: `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`
-
-### Git Guidelines
-
-- Never commit `.env.local` or sensitive credentials
-- Never use `git commit --amend` on pushed commits
-- Only commit when explicitly requested by user
-- Write clear, descriptive commit messages
-
-## Key Dependencies
-
-- **UI**: `@radix-ui/*`, `class-variance-authority`, `tailwind-merge`
-- **Forms**: `react-hook-form`, `@hookform/resolvers`, `zod@4.x`
-- **Auth**: `better-auth`, `@convex-dev/better-auth`
-- **Database**: `convex`
-- **i18n**: `next-intl`
-- **Icons**: `lucide-react`, `@phosphor-icons/react`
-- **Monitoring**: `@sentry/nextjs`
-
-## Quick Reference
-
-**Adding a shadcn/ui component**:
-```bash
-cd local-brand-khit && bunx shadcn@latest add button
-```
-
-**Using the cn() utility**:
-```typescript
-import { cn } from "@/lib/utils";
-className={cn("base-classes", isActive && "active", className)}
-```
+1. Use `bun`, not npm/yarn/pnpm.
+2. Prefer extending reusable components over page-local duplication:
+   - `AdminDataTable`
+   - `AdminMediaUploader`
+   - `product-variants` utility
+   - `notifications` helper
+3. Keep docs updated when behavior changes:
+   - `README.md`
+   - `project-tasks/project-history.md`
+   - `project-tasks/phase-3-admin-panel.md`
+4. For Convex schema changes, account for existing data compatibility/migration.
+5. For image-related fixes, validate end-to-end:
+   - admin upload/association
+   - product API payload
+   - storefront render/swap/fallback

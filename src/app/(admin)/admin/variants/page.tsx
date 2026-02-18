@@ -7,7 +7,6 @@ import { api } from "@/../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -23,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Plus, Boxes } from "lucide-react";
+import { Boxes, Pencil, Plus, Trash2 } from "lucide-react";
 import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
@@ -54,7 +53,6 @@ interface VariantItem {
   stockQuantity: number;
   displayOrder: number;
   isPrimary: boolean;
-  isActive: boolean;
   productName: string;
   colorName: string;
   colorHex: string;
@@ -98,11 +96,10 @@ export default function VariantsPage() {
   const [selectedColorId, setSelectedColorId] = useState("");
   const [selectedSizeId, setSelectedSizeId] = useState("");
   const [isPrimary, setIsPrimary] = useState(false);
-  const [isActive, setIsActive] = useState(true);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  const variants = useQuery(api.variants.getAll, { includeInactive: true });
-  const products = useQuery(api.products.getAll, { includeInactive: true });
+  const variants = useQuery(api.variants.getAll, {});
+  const products = useQuery(api.products.getAll, {});
   const colors = useQuery(api.colors.getAll, { includeInactive: false });
   const sizes = useQuery(api.sizes.getAll, { includeInactive: false });
 
@@ -122,7 +119,6 @@ export default function VariantsPage() {
     setSelectedColorId("");
     setSelectedSizeId("");
     setIsPrimary(false);
-    setIsActive(true);
     setFormErrors({});
   };
 
@@ -132,7 +128,6 @@ export default function VariantsPage() {
     setSelectedColorId(colorOptions[0]?._id || "");
     setSelectedSizeId(sizeOptions[0]?._id || "");
     setIsPrimary(false);
-    setIsActive(true);
     setFormErrors({});
     setIsDialogOpen(true);
   };
@@ -143,7 +138,6 @@ export default function VariantsPage() {
     setSelectedColorId(variant.colorId);
     setSelectedSizeId(variant.sizeId);
     setIsPrimary(variant.isPrimary);
-    setIsActive(variant.isActive);
     setFormErrors({});
     setIsDialogOpen(true);
   };
@@ -188,7 +182,6 @@ export default function VariantsPage() {
             stockQuantity: data.stockQuantity,
             displayOrder: data.displayOrder,
             isPrimary,
-            isActive,
           },
         });
         notify.updated("Variant");
@@ -288,10 +281,12 @@ export default function VariantsPage() {
         rowActions={(variant) => [
           {
             label: "Update",
+            icon: Pencil,
             onClick: () => openEdit(variant),
           },
           {
             label: "Delete",
+            icon: Trash2,
             destructive: true,
             onClick: () => handleDelete(variant._id),
           },
@@ -303,27 +298,45 @@ export default function VariantsPage() {
             id: "product",
             header: "Product",
             searchAccessor: (variant) =>
-              `${variant.productName} ${variant.colorName} ${variant.sizeName}`,
+              `${variant.productName} ${variant.colorName} ${variant.sizeName} ${variant.skuVariant}`,
+            cell: (variant) => <span className="font-medium">{variant.productName}</span>,
+          },
+          {
+            id: "color",
+            header: "Color",
+            searchAccessor: (variant) => variant.colorName,
             cell: (variant) => (
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{variant.productName}</span>
-                  {variant.isPrimary && <Badge>Primary</Badge>}
-                  {!variant.isActive && <Badge variant="secondary">Inactive</Badge>}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {variant.colorName}/{variant.sizeName}
-                </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className="h-3 w-3 shrink-0 rounded-full border"
+                  style={{ backgroundColor: variant.colorHex }}
+                />
+                <span>{variant.colorName}</span>
               </div>
             ),
           },
           {
+            id: "size",
+            header: "Size",
+            searchAccessor: (variant) => variant.sizeName,
+            cell: (variant) => variant.sizeName,
+          },
+          {
             id: "sku",
             header: "SKU",
+            defaultHidden: true,
             searchAccessor: (variant) => variant.skuVariant,
-            cell: (variant) => variant.skuVariant,
+            cell: (variant) => (
+              <span className="max-w-[260px] truncate text-sm text-muted-foreground">
+                {variant.skuVariant}
+              </span>
+            ),
           },
-          { id: "stock", header: "Stock", cell: (variant) => variant.stockQuantity },
+          {
+            id: "stock",
+            header: "Stock",
+            cell: (variant) => <span className="font-medium tabular-nums">{variant.stockQuantity}</span>,
+          },
           {
             id: "price",
             header: "Price Override",
@@ -351,7 +364,7 @@ export default function VariantsPage() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 items-start gap-4">
               <Field invalid={Boolean(formErrors.productId)}>
                 <FieldLabel>Product *</FieldLabel>
                 <Select value={selectedProductId} onValueChange={setSelectedProductId}>
@@ -366,7 +379,9 @@ export default function VariantsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                {formErrors.productId && <FieldDescription>{formErrors.productId}</FieldDescription>}
+                <FieldDescription className={!formErrors.productId ? "invisible" : undefined}>
+                  {formErrors.productId ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.colorId)}>
                 <FieldLabel>Color *</FieldLabel>
@@ -382,18 +397,24 @@ export default function VariantsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedColor && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <span
-                      className="h-4 w-4 rounded border"
-                      style={{ backgroundColor: selectedColor.hexCode }}
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {selectedColor.name} ({selectedColor.hexCode})
-                    </span>
-                  </div>
-                )}
-                {formErrors.colorId && <FieldDescription>{formErrors.colorId}</FieldDescription>}
+                <div className="min-h-6 pt-1">
+                  {selectedColor ? (
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-4 w-4 rounded border"
+                        style={{ backgroundColor: selectedColor.hexCode }}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {selectedColor.name} ({selectedColor.hexCode})
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="invisible text-xs">.</span>
+                  )}
+                </div>
+                <FieldDescription className={!formErrors.colorId ? "invisible" : undefined}>
+                  {formErrors.colorId ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.sizeId)}>
                 <FieldLabel>Size *</FieldLabel>
@@ -409,11 +430,13 @@ export default function VariantsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                {formErrors.sizeId && <FieldDescription>{formErrors.sizeId}</FieldDescription>}
+                <FieldDescription className={!formErrors.sizeId ? "invisible" : undefined}>
+                  {formErrors.sizeId ?? " "}
+                </FieldDescription>
               </Field>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 items-start gap-4">
               <Field invalid={Boolean(formErrors.skuVariant)}>
                 <FieldLabel htmlFor="skuVariant">Variant SKU *</FieldLabel>
                 <Input
@@ -423,9 +446,9 @@ export default function VariantsPage() {
                   aria-invalid={Boolean(formErrors.skuVariant)}
                   required
                 />
-                {formErrors.skuVariant && (
-                  <FieldDescription>{formErrors.skuVariant}</FieldDescription>
-                )}
+                <FieldDescription className={!formErrors.skuVariant ? "invisible" : undefined}>
+                  {formErrors.skuVariant ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.priceOverride)}>
                 <FieldLabel htmlFor="priceOverride">Price Override (Ks)</FieldLabel>
@@ -436,9 +459,9 @@ export default function VariantsPage() {
                   defaultValue={editingVariant?.priceOverride}
                   aria-invalid={Boolean(formErrors.priceOverride)}
                 />
-                {formErrors.priceOverride && (
-                  <FieldDescription>{formErrors.priceOverride}</FieldDescription>
-                )}
+                <FieldDescription className={!formErrors.priceOverride ? "invisible" : undefined}>
+                  {formErrors.priceOverride ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.stockQuantity)}>
                 <FieldLabel htmlFor="stockQuantity">Stock *</FieldLabel>
@@ -450,13 +473,13 @@ export default function VariantsPage() {
                   aria-invalid={Boolean(formErrors.stockQuantity)}
                   required
                 />
-                {formErrors.stockQuantity && (
-                  <FieldDescription>{formErrors.stockQuantity}</FieldDescription>
-                )}
+                <FieldDescription className={!formErrors.stockQuantity ? "invisible" : undefined}>
+                  {formErrors.stockQuantity ?? " "}
+                </FieldDescription>
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 items-end gap-4">
               <Field invalid={Boolean(formErrors.displayOrder)}>
                 <FieldLabel htmlFor="displayOrder">Display Order</FieldLabel>
                 <Input
@@ -466,21 +489,15 @@ export default function VariantsPage() {
                   defaultValue={editingVariant?.displayOrder ?? 0}
                   aria-invalid={Boolean(formErrors.displayOrder)}
                 />
-                {formErrors.displayOrder && (
-                  <FieldDescription>{formErrors.displayOrder}</FieldDescription>
-                )}
+                <FieldDescription className={!formErrors.displayOrder ? "invisible" : undefined}>
+                  {formErrors.displayOrder ?? " "}
+                </FieldDescription>
               </Field>
-              <div className="space-y-2 flex items-end gap-6 pb-2">
+              <div className="flex h-10 items-center gap-6">
                 <div className="flex items-center gap-2">
                   <Switch id="isPrimary" checked={isPrimary} onCheckedChange={setIsPrimary} />
                   <FieldLabel htmlFor="isPrimary">Primary</FieldLabel>
                 </div>
-                {editingVariant && (
-                  <div className="flex items-center gap-2">
-                    <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
-                    <FieldLabel htmlFor="isActive">Active</FieldLabel>
-                  </div>
-                )}
               </div>
             </div>
 

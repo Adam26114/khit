@@ -39,10 +39,6 @@ export const getAll = query({
       mediaList = await ctx.db.query("media").collect();
     }
 
-    if (!args.includeInactive) {
-      mediaList = mediaList.filter((item) => item.isActive);
-    }
-
     mediaList.sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt - b.createdAt);
 
     if (args.limit) {
@@ -90,30 +86,97 @@ export const create = mutation({
     }
 
     const now = Date.now();
+    const normalizedFilePath = args.filePath.trim();
+    const normalizedFileUrl = args.fileUrl?.trim() || undefined;
+    const normalizedThumbnailUrl = args.thumbnailUrl?.trim() || undefined;
+    const normalizedAltText = args.altText?.trim() || undefined;
 
-    if (args.isPrimary) {
-      await clearVariantPrimaryMedia(ctx, args.variantId);
+    if (!normalizedFilePath) {
+      throw new Error("File path is required");
     }
 
-    const maxDisplayOrder = (await ctx.db
-      .query("media")
-      .withIndex("by_variant", (q) => q.eq("variantId", args.variantId))
-      .collect()
-    ).reduce((max, item) => Math.max(max, item.displayOrder), 0);
+    const relatedVariants = await ctx.db
+      .query("productVariants")
+      .withIndex("by_product_color", (q) =>
+        q.eq("productId", variant.productId).eq("colorId", variant.colorId)
+      )
+      .collect();
 
-    return await ctx.db.insert("media", {
-      variantId: args.variantId,
-      mediaType: args.mediaType,
-      filePath: args.filePath.trim(),
-      fileUrl: args.fileUrl?.trim() || undefined,
-      thumbnailUrl: args.thumbnailUrl?.trim() || undefined,
-      altText: args.altText?.trim() || undefined,
-      displayOrder: args.displayOrder ?? maxDisplayOrder + 1,
-      isPrimary: Boolean(args.isPrimary),
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
-    });
+    const targetVariantsMap = new Map<string, Id<"productVariants">>();
+    targetVariantsMap.set(String(variant._id), variant._id);
+    for (const related of relatedVariants) {
+      targetVariantsMap.set(String(related._id), related._id);
+    }
+    const targetVariantIds = Array.from(targetVariantsMap.values());
+
+    let selectedVariantMediaId: Id<"media"> | null = null;
+    let firstAffectedMediaId: Id<"media"> | null = null;
+
+    for (const targetVariantId of targetVariantIds) {
+      if (args.isPrimary) {
+        await clearVariantPrimaryMedia(ctx, targetVariantId);
+      }
+
+      const existingMedia = await ctx.db
+        .query("media")
+        .withIndex("by_variant", (q) => q.eq("variantId", targetVariantId))
+        .collect();
+
+      const activeMatchingMedia = existingMedia.find(
+        (item) =>
+          item.mediaType === args.mediaType &&
+          item.filePath.trim() === normalizedFilePath
+      );
+
+      const maxDisplayOrder = existingMedia.reduce(
+        (max, item) => Math.max(max, item.displayOrder),
+        0
+      );
+      const nextDisplayOrder = args.displayOrder ?? maxDisplayOrder + 1;
+
+      let affectedMediaId: Id<"media">;
+
+      if (activeMatchingMedia) {
+        affectedMediaId = activeMatchingMedia._id;
+        await ctx.db.patch(activeMatchingMedia._id, {
+          fileUrl: normalizedFileUrl,
+          thumbnailUrl: normalizedThumbnailUrl,
+          altText: normalizedAltText,
+          displayOrder: nextDisplayOrder,
+          isPrimary: Boolean(args.isPrimary),
+          updatedAt: now,
+        });
+      } else {
+        affectedMediaId = await ctx.db.insert("media", {
+          variantId: targetVariantId,
+          mediaType: args.mediaType,
+          filePath: normalizedFilePath,
+          fileUrl: normalizedFileUrl,
+          thumbnailUrl: normalizedThumbnailUrl,
+          altText: normalizedAltText,
+          displayOrder: nextDisplayOrder,
+          isPrimary: Boolean(args.isPrimary),
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      if (firstAffectedMediaId === null) {
+        firstAffectedMediaId = affectedMediaId;
+      }
+      if (targetVariantId === args.variantId) {
+        selectedVariantMediaId = affectedMediaId;
+      }
+    }
+
+    if (selectedVariantMediaId) {
+      return selectedVariantMediaId;
+    }
+    if (firstAffectedMediaId) {
+      return firstAffectedMediaId;
+    }
+
+    throw new Error("Unable to create media");
   },
 });
 
@@ -129,7 +192,6 @@ export const update = mutation({
       altText: v.optional(v.string()),
       displayOrder: v.optional(v.number()),
       isPrimary: v.optional(v.boolean()),
-      isActive: v.optional(v.boolean()),
     }),
   },
   handler: async (ctx, { id, updates }) => {
@@ -165,10 +227,6 @@ export const remove = mutation({
       throw new Error("Media not found");
     }
 
-    await ctx.db.patch(id, {
-      isActive: false,
-      isPrimary: false,
-      updatedAt: Date.now(),
-    });
+    await ctx.db.delete(id);
   },
 });

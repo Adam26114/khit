@@ -7,7 +7,6 @@ import { api } from "@/../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -23,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Plus, Images } from "lucide-react";
+import { Images, Pencil, Plus, Trash2 } from "lucide-react";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
 import { resolveImageSrc } from "@/lib/image";
@@ -48,7 +47,6 @@ interface MediaItem {
   altText?: string;
   displayOrder: number;
   isPrimary: boolean;
-  isActive: boolean;
   productName: string;
   variantSku: string;
   colorName: string;
@@ -74,14 +72,13 @@ export default function MediaPage() {
   const [selectedVariantId, setSelectedVariantId] = useState("");
   const [mediaType, setMediaType] = useState<"image" | "video">("image");
   const [isPrimary, setIsPrimary] = useState(false);
-  const [isActive, setIsActive] = useState(true);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const [uploadedPreviews, setUploadedPreviews] = useState<Record<string, string>>({});
   const [fileUrl, setFileUrl] = useState("");
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  const mediaItems = useQuery(api.media.getAll, { includeInactive: true });
-  const variants = useQuery(api.variants.getAll, { includeInactive: true, limit: 200 });
+  const mediaItems = useQuery(api.media.getAll, {});
+  const variants = useQuery(api.variants.getAll, { limit: 200 });
 
   const createMedia = useMutation(api.media.create);
   const updateMedia = useMutation(api.media.update);
@@ -96,7 +93,6 @@ export default function MediaPage() {
     setSelectedVariantId("");
     setMediaType("image");
     setIsPrimary(false);
-    setIsActive(true);
     setUploadedFiles([]);
     setUploadedPreviews({});
     setFileUrl("");
@@ -108,7 +104,6 @@ export default function MediaPage() {
     setSelectedVariantId(variantOptions[0]?._id || "");
     setMediaType("image");
     setIsPrimary(false);
-    setIsActive(true);
     setUploadedFiles([]);
     setUploadedPreviews({});
     setFileUrl("");
@@ -121,7 +116,6 @@ export default function MediaPage() {
     setSelectedVariantId(media.variantId);
     setMediaType(media.mediaType);
     setIsPrimary(media.isPrimary);
-    setIsActive(media.isActive);
     setUploadedFiles([media.filePath]);
     setUploadedPreviews({
       [media.filePath]: resolveImageSrc(media.fileUrl || media.filePath),
@@ -171,7 +165,6 @@ export default function MediaPage() {
             altText: data.altText,
             displayOrder: data.displayOrder,
             isPrimary,
-            isActive,
           },
         });
         notify.updated("Media");
@@ -264,10 +257,12 @@ export default function MediaPage() {
         rowActions={(media) => [
           {
             label: "Update",
+            icon: Pencil,
             onClick: () => openEdit(media),
           },
           {
             label: "Delete",
+            icon: Trash2,
             destructive: true,
             onClick: () => handleDelete(media._id),
           },
@@ -296,29 +291,44 @@ export default function MediaPage() {
           },
           {
             id: "product",
-            header: "Product / Variant",
+            header: "Product",
             searchAccessor: (media) =>
               `${media.productName} ${media.variantSku} ${media.colorName} ${media.sizeName}`,
+            cell: (media) => <span className="font-medium">{media.productName}</span>,
+          },
+          {
+            id: "variant",
+            header: "Variant",
+            searchAccessor: (media) => `${media.colorName} ${media.sizeName}`,
             cell: (media) => (
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{media.productName}</span>
-                  <Badge variant="outline">{media.mediaType}</Badge>
-                  {media.isPrimary && <Badge>Primary</Badge>}
-                  {!media.isActive && <Badge variant="secondary">Inactive</Badge>}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {media.variantSku} • {media.colorName}/{media.sizeName}
-                </div>
-              </div>
+              <span className="text-sm text-muted-foreground">
+                {media.colorName}/{media.sizeName}
+              </span>
             ),
+          },
+          {
+            id: "type",
+            header: "Type",
+            searchAccessor: (media) => media.mediaType,
+            cell: (media) => (
+              <span className="uppercase text-xs tracking-wide text-muted-foreground">
+                {media.mediaType}
+              </span>
+            ),
+          },
+          {
+            id: "primary",
+            header: "Primary",
+            searchAccessor: (media) => (media.isPrimary ? "yes" : "no"),
+            cell: (media) => (media.isPrimary ? "Yes" : "No"),
           },
           {
             id: "filePath",
             header: "Storage ID",
+            defaultHidden: true,
             searchAccessor: (media) => media.filePath,
             cell: (media) => (
-              <span className="max-w-[380px] truncate text-sm text-muted-foreground">
+              <span className="max-w-[240px] truncate text-sm text-muted-foreground">
                 {media.filePath}
               </span>
             ),
@@ -343,7 +353,7 @@ export default function MediaPage() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 items-start gap-4">
               <Field invalid={Boolean(formErrors.variantId)}>
                 <FieldLabel>Variant *</FieldLabel>
                 <Select value={selectedVariantId} onValueChange={setSelectedVariantId}>
@@ -358,7 +368,9 @@ export default function MediaPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                {formErrors.variantId && <FieldDescription>{formErrors.variantId}</FieldDescription>}
+                <FieldDescription className={!formErrors.variantId ? "invisible" : undefined}>
+                  {formErrors.variantId ?? " "}
+                </FieldDescription>
               </Field>
 
               <Field invalid={Boolean(formErrors.mediaType)}>
@@ -375,7 +387,9 @@ export default function MediaPage() {
                     <SelectItem value="video">Video</SelectItem>
                   </SelectContent>
                 </Select>
-                {formErrors.mediaType && <FieldDescription>{formErrors.mediaType}</FieldDescription>}
+                <FieldDescription className={!formErrors.mediaType ? "invisible" : undefined}>
+                  {formErrors.mediaType ?? " "}
+                </FieldDescription>
               </Field>
             </div>
 
@@ -394,9 +408,13 @@ export default function MediaPage() {
                 compressImages={mediaType === "image"}
                 successMessage="Media uploaded successfully"
               />
+              <p className="text-xs text-muted-foreground">
+                Media uploads are auto-linked to all variants with the same
+                product + color (all sizes).
+              </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 items-start gap-4">
               <Field invalid={Boolean(formErrors.filePath)}>
                 <FieldLabel htmlFor="filePath">File Path / Storage ID *</FieldLabel>
                 <Input
@@ -412,7 +430,9 @@ export default function MediaPage() {
                   aria-invalid={Boolean(formErrors.filePath)}
                   required
                 />
-                {formErrors.filePath && <FieldDescription>{formErrors.filePath}</FieldDescription>}
+                <FieldDescription className={!formErrors.filePath ? "invisible" : undefined}>
+                  {formErrors.filePath ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.fileUrl)}>
                 <FieldLabel htmlFor="fileUrl">File URL (optional)</FieldLabel>
@@ -422,11 +442,13 @@ export default function MediaPage() {
                   onChange={(e) => setFileUrl(e.target.value)}
                   aria-invalid={Boolean(formErrors.fileUrl)}
                 />
-                {formErrors.fileUrl && <FieldDescription>{formErrors.fileUrl}</FieldDescription>}
+                <FieldDescription className={!formErrors.fileUrl ? "invisible" : undefined}>
+                  {formErrors.fileUrl ?? " "}
+                </FieldDescription>
               </Field>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 items-start gap-4">
               <Field invalid={Boolean(formErrors.thumbnailUrl)}>
                 <FieldLabel htmlFor="thumbnailUrl">Thumbnail URL</FieldLabel>
                 <Input
@@ -435,9 +457,9 @@ export default function MediaPage() {
                   defaultValue={editingMedia?.thumbnailUrl}
                   aria-invalid={Boolean(formErrors.thumbnailUrl)}
                 />
-                {formErrors.thumbnailUrl && (
-                  <FieldDescription>{formErrors.thumbnailUrl}</FieldDescription>
-                )}
+                <FieldDescription className={!formErrors.thumbnailUrl ? "invisible" : undefined}>
+                  {formErrors.thumbnailUrl ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.altText)}>
                 <FieldLabel htmlFor="altText">Alt Text</FieldLabel>
@@ -447,7 +469,9 @@ export default function MediaPage() {
                   defaultValue={editingMedia?.altText}
                   aria-invalid={Boolean(formErrors.altText)}
                 />
-                {formErrors.altText && <FieldDescription>{formErrors.altText}</FieldDescription>}
+                <FieldDescription className={!formErrors.altText ? "invisible" : undefined}>
+                  {formErrors.altText ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.displayOrder)}>
                 <FieldLabel htmlFor="displayOrder">Display Order</FieldLabel>
@@ -458,9 +482,9 @@ export default function MediaPage() {
                   defaultValue={editingMedia?.displayOrder ?? 0}
                   aria-invalid={Boolean(formErrors.displayOrder)}
                 />
-                {formErrors.displayOrder && (
-                  <FieldDescription>{formErrors.displayOrder}</FieldDescription>
-                )}
+                <FieldDescription className={!formErrors.displayOrder ? "invisible" : undefined}>
+                  {formErrors.displayOrder ?? " "}
+                </FieldDescription>
               </Field>
             </div>
 
@@ -469,12 +493,6 @@ export default function MediaPage() {
                 <Switch id="isPrimary" checked={isPrimary} onCheckedChange={setIsPrimary} />
                 <FieldLabel htmlFor="isPrimary">Primary</FieldLabel>
               </div>
-              {editingMedia && (
-                <div className="flex items-center gap-2">
-                  <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
-                  <FieldLabel htmlFor="isActive">Active</FieldLabel>
-                </div>
-              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-4">

@@ -6,7 +6,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -23,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Plus, Package, Star } from "lucide-react";
+import { Eye, EyeOff, Pencil, Plus, Package, Trash2 } from "lucide-react";
 import { resolveImageSrc } from "@/lib/image";
 import { AdminMediaUploader } from "@/components/admin/media-uploader";
 import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
@@ -49,6 +48,7 @@ interface Product {
   images: string[];
   imageRefs?: string[];
   isFeatured: boolean;
+  isPublished?: boolean;
   isActive: boolean;
   isOutOfStock: boolean;
   categoryId: string;
@@ -101,6 +101,7 @@ const productSchema = z
       )
       .optional(),
     isFeatured: z.boolean(),
+    isPublished: z.boolean(),
   })
   .superRefine((data, ctx) => {
     if (data.salePrice !== undefined && data.salePrice > data.price) {
@@ -121,7 +122,7 @@ export default function ProductsPage() {
   const [colorVariants, setColorVariants] = useState<ColorVariant[]>([]);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  const products = useQuery(api.products.getAll, { includeInactive: true });
+  const products = useQuery(api.products.getAll, {});
   const categories = useQuery(api.categories.getActive);
   const createProduct = useMutation(api.products.create);
   const updateProduct = useMutation(api.products.update);
@@ -192,6 +193,7 @@ export default function ProductsPage() {
       stock: formData.get("stock") ?? "0",
       images: uploadedImages,
       isFeatured: formData.get("isFeatured") === "on",
+      isPublished: formData.get("isPublished") === "on",
     });
 
     if (!parsed.success) {
@@ -221,6 +223,7 @@ export default function ProductsPage() {
             stock: data.stock,
             images: data.images,
             isFeatured: data.isFeatured,
+            isPublished: data.isPublished,
           },
         });
         notify.updated("Product");
@@ -238,6 +241,7 @@ export default function ProductsPage() {
           stock: data.stock,
           images: data.images,
           isFeatured: data.isFeatured,
+          isPublished: data.isPublished,
         });
         notify.created("Product");
       }
@@ -255,6 +259,22 @@ export default function ProductsPage() {
       notify.deleted("Product");
     } catch (error) {
       notify.actionError("delete product", error);
+    }
+  };
+
+  const handleTogglePublished = async (product: Product) => {
+    const nextPublished = product.isPublished === false;
+    try {
+      await updateProduct({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        id: product._id as any,
+        updates: {
+          isPublished: nextPublished,
+        },
+      });
+      notify.success(`Product ${nextPublished ? "published" : "unpublished"}`);
+    } catch (error) {
+      notify.actionError("update product visibility", error);
     }
   };
 
@@ -314,10 +334,17 @@ export default function ProductsPage() {
         rowActions={(product) => [
           {
             label: "Update",
+            icon: Pencil,
             onClick: () => openEdit(product),
           },
           {
+            label: product.isPublished === false ? "Make Public" : "Make Unpublic",
+            icon: product.isPublished === false ? Eye : EyeOff,
+            onClick: () => handleTogglePublished(product),
+          },
+          {
             label: "Delete",
+            icon: Trash2,
             destructive: true,
             onClick: () => handleDelete(product._id),
           },
@@ -328,46 +355,45 @@ export default function ProductsPage() {
           {
             id: "name",
             header: "Product",
-            searchAccessor: (product) =>
-              `${product.name} ${product.description ?? ""} ${product.isFeatured ? "featured" : ""}`,
+            searchAccessor: (product) => `${product.name} ${product.description ?? ""} ${product.slug}`,
             cell: (product) => (
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{product.name}</span>
-                  {product.isFeatured && (
-                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                  )}
-                  {!product.isActive && <Badge variant="secondary">Inactive</Badge>}
-                  {product.isOutOfStock && <Badge variant="destructive">Out of Stock</Badge>}
-                </div>
-                <div className="text-sm text-muted-foreground">{product.description}</div>
-              </div>
+              <span className="font-medium">{product.name}</span>
             ),
           },
           {
             id: "slug",
             header: "Slug",
+            defaultHidden: true,
             searchAccessor: (product) => product.slug,
-            cell: (product) => <span className="text-sm text-muted-foreground">{product.slug}</span>,
+            cell: (product) => (
+              <span className="text-sm text-muted-foreground">{product.slug}</span>
+            ),
           },
           {
             id: "stock",
             header: "Stock",
-            cell: (product) => product.stock,
+            cell: (product) => <span className="font-medium tabular-nums">{product.stock}</span>,
+          },
+          {
+            id: "status",
+            header: "Status",
+            searchAccessor: (product) => (product.isPublished === false ? "unpublic" : "public"),
+            sortAccessor: (product) => (product.isPublished === false ? 0 : 1),
+            cell: (product) => (
+              <span className={product.isPublished === false ? "text-muted-foreground" : "text-foreground"}>
+                {product.isPublished === false ? "Unpublic" : "Public"}
+              </span>
+            ),
           },
           {
             id: "price",
             header: "Price",
-            cell: (product) => (
-              <div className="text-sm">
-                Ks {product.price.toLocaleString()}
-                {product.salePrice && (
-                  <div className="text-green-600">
-                    Sale: Ks {product.salePrice.toLocaleString()}
-                  </div>
-                )}
-              </div>
-            ),
+            searchAccessor: (product) =>
+              `${product.price} ${product.salePrice ?? ""} ${product.isFeatured ? "featured" : ""}`,
+            cell: (product) => {
+              const displayPrice = product.salePrice ?? product.price;
+              return <span className="font-medium tabular-nums">Ks {displayPrice.toLocaleString()}</span>;
+            },
           },
         ] satisfies AdminTableColumn<Product>[]}
       />
@@ -387,7 +413,7 @@ export default function ProductsPage() {
             <DialogTitle>{editingProduct ? "Edit Product" : "Add New Product"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 items-start gap-4">
               <Field invalid={Boolean(formErrors.name)}>
                 <FieldLabel htmlFor="name">Product Name *</FieldLabel>
                 <Input
@@ -397,7 +423,9 @@ export default function ProductsPage() {
                   aria-invalid={Boolean(formErrors.name)}
                   required
                 />
-                {formErrors.name && <FieldDescription>{formErrors.name}</FieldDescription>}
+                <FieldDescription className={!formErrors.name ? "invisible" : undefined}>
+                  {formErrors.name ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.slug)}>
                 <FieldLabel htmlFor="slug">Slug *</FieldLabel>
@@ -408,7 +436,9 @@ export default function ProductsPage() {
                   aria-invalid={Boolean(formErrors.slug)}
                   required
                 />
-                {formErrors.slug && <FieldDescription>{formErrors.slug}</FieldDescription>}
+                <FieldDescription className={!formErrors.slug ? "invisible" : undefined}>
+                  {formErrors.slug ?? " "}
+                </FieldDescription>
               </Field>
             </div>
 
@@ -421,10 +451,12 @@ export default function ProductsPage() {
                 aria-invalid={Boolean(formErrors.description)}
                 required
               />
-              {formErrors.description && <FieldDescription>{formErrors.description}</FieldDescription>}
+              <FieldDescription className={!formErrors.description ? "invisible" : undefined}>
+                {formErrors.description ?? " "}
+              </FieldDescription>
             </Field>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 items-start gap-4">
               <Field invalid={Boolean(formErrors.price)}>
                 <FieldLabel htmlFor="price">Price (Ks) *</FieldLabel>
                 <Input
@@ -435,7 +467,9 @@ export default function ProductsPage() {
                   aria-invalid={Boolean(formErrors.price)}
                   required
                 />
-                {formErrors.price && <FieldDescription>{formErrors.price}</FieldDescription>}
+                <FieldDescription className={!formErrors.price ? "invisible" : undefined}>
+                  {formErrors.price ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.salePrice)}>
                 <FieldLabel htmlFor="salePrice">Sale Price (Ks)</FieldLabel>
@@ -446,7 +480,9 @@ export default function ProductsPage() {
                   defaultValue={editingProduct?.salePrice}
                   aria-invalid={Boolean(formErrors.salePrice)}
                 />
-                {formErrors.salePrice && <FieldDescription>{formErrors.salePrice}</FieldDescription>}
+                <FieldDescription className={!formErrors.salePrice ? "invisible" : undefined}>
+                  {formErrors.salePrice ?? " "}
+                </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.stock)}>
                 <FieldLabel htmlFor="stock">Stock *</FieldLabel>
@@ -458,7 +494,9 @@ export default function ProductsPage() {
                   aria-invalid={Boolean(formErrors.stock)}
                   required
                 />
-                {formErrors.stock && <FieldDescription>{formErrors.stock}</FieldDescription>}
+                <FieldDescription className={!formErrors.stock ? "invisible" : undefined}>
+                  {formErrors.stock ?? " "}
+                </FieldDescription>
               </Field>
             </div>
 
@@ -476,7 +514,9 @@ export default function ProductsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              {formErrors.categoryId && <FieldDescription>{formErrors.categoryId}</FieldDescription>}
+              <FieldDescription className={!formErrors.categoryId ? "invisible" : undefined}>
+                {formErrors.categoryId ?? " "}
+              </FieldDescription>
             </Field>
 
             <Field invalid={Boolean(formErrors.sizes)}>
@@ -498,7 +538,9 @@ export default function ProductsPage() {
                   </Button>
                 ))}
               </div>
-              {formErrors.sizes && <FieldDescription>{formErrors.sizes}</FieldDescription>}
+              <FieldDescription className={!formErrors.sizes ? "invisible" : undefined}>
+                {formErrors.sizes ?? " "}
+              </FieldDescription>
             </Field>
 
             <Field invalid={Boolean(formErrors.images)}>
@@ -516,7 +558,9 @@ export default function ProductsPage() {
                 compressImages
                 successMessage="Image uploaded as WebP (max 1920x1080)"
               />
-              {formErrors.images && <FieldDescription>{formErrors.images}</FieldDescription>}
+              <FieldDescription className={!formErrors.images ? "invisible" : undefined}>
+                {formErrors.images ?? " "}
+              </FieldDescription>
             </Field>
 
             <div className="flex items-center space-x-2">
@@ -526,6 +570,15 @@ export default function ProductsPage() {
                 defaultChecked={editingProduct?.isFeatured}
               />
               <FieldLabel htmlFor="isFeatured">Featured Product</FieldLabel>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="isPublished"
+                name="isPublished"
+                defaultChecked={editingProduct?.isPublished ?? true}
+              />
+              <FieldLabel htmlFor="isPublished">Public Product</FieldLabel>
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
