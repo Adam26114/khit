@@ -20,7 +20,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     parentId: v.optional(v.id("categories")),
     sortOrder: v.number(),
-    isActive: v.boolean(),
+    isActive: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -33,7 +33,7 @@ export default defineSchema({
     nameMm: v.optional(v.string()),
     hexCode: v.string(),
     displayOrder: v.number(),
-    isActive: v.boolean(),
+    isActive: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -46,7 +46,7 @@ export default defineSchema({
     nameMm: v.optional(v.string()),
     sizeCategory: v.string(),
     displayOrder: v.number(),
-    isActive: v.boolean(),
+    isActive: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -98,7 +98,7 @@ export default defineSchema({
     stockQuantity: v.number(),
     displayOrder: v.number(),
     isPrimary: v.boolean(),
-    isActive: v.boolean(),
+    isActive: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -117,7 +117,7 @@ export default defineSchema({
     altText: v.optional(v.string()),
     displayOrder: v.number(),
     isPrimary: v.boolean(),
-    isActive: v.boolean(),
+    isActive: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

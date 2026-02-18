@@ -6,7 +6,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -26,7 +25,6 @@ interface ColorItem {
   nameMm?: string;
   hexCode: string;
   displayOrder: number;
-  isActive: boolean;
 }
 
 const colorSchema = z.object({
@@ -45,7 +43,6 @@ const colorSchema = z.object({
 export default function ColorsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingColor, setEditingColor] = useState<ColorItem | null>(null);
-  const [isActive, setIsActive] = useState(true);
   const [hexCodeValue, setHexCodeValue] = useState("#111111");
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
@@ -57,14 +54,12 @@ export default function ColorsPage() {
   const resetDialogState = () => {
     setIsDialogOpen(false);
     setEditingColor(null);
-    setIsActive(true);
     setHexCodeValue("#111111");
     setFormErrors({});
   };
 
   const openCreate = () => {
     setEditingColor(null);
-    setIsActive(true);
     setHexCodeValue("#111111");
     setFormErrors({});
     setIsDialogOpen(true);
@@ -72,7 +67,6 @@ export default function ColorsPage() {
 
   const openEdit = (color: ColorItem) => {
     setEditingColor(color);
-    setIsActive(color.isActive);
     setHexCodeValue(color.hexCode || "#111111");
     setFormErrors({});
     setIsDialogOpen(true);
@@ -111,7 +105,6 @@ export default function ColorsPage() {
             nameMm: data.nameMm,
             hexCode: data.hexCode,
             displayOrder: data.displayOrder,
-            isActive,
           },
         });
         notify.updated("Color");
@@ -238,13 +231,6 @@ export default function ColorsPage() {
             header: "Order",
             cell: (color) => color.displayOrder,
           },
-          {
-            id: "active",
-            header: "Active",
-            defaultHidden: true,
-            searchAccessor: (color) => (color.isActive ? "active" : "inactive"),
-            cell: (color) => (color.isActive ? "Yes" : "No"),
-          },
         ] satisfies AdminTableColumn<ColorItem>[]}
       />
 
@@ -338,13 +324,6 @@ export default function ColorsPage() {
                 </FieldDescription>
               </Field>
             </div>
-
-            {editingColor && (
-              <div className="flex items-center space-x-2">
-                <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
-                <FieldLabel htmlFor="isActive">Active</FieldLabel>
-              </div>
-            )}
 
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={resetDialogState}>

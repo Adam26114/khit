@@ -382,12 +382,6 @@ export function AdminDataTable<T>({
     await action.onClick(row);
   };
 
-  const executeMenuAction = (action: () => Promise<void>) => {
-    void action().catch((error) => {
-      console.error("Table action failed", error);
-    });
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -443,8 +437,9 @@ export function AdminDataTable<T>({
                       return (
                         <DropdownMenuItem
                           key={action.label}
-                          onClick={() => {
-                            executeMenuAction(() => runToolbarAction(action));
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            runToolbarAction(action);
                           }}
                           disabled={action.disabled}
                           className={action.destructive ? "text-destructive focus:text-destructive" : ""}
@@ -467,9 +462,10 @@ export function AdminDataTable<T>({
                       return (
                         <DropdownMenuItem
                           key={action.label}
-                          onClick={() => {
+                          onSelect={(event) => {
+                            event.preventDefault();
                             if (disabled) return;
-                            executeMenuAction(() => runBulkAction(action));
+                            runBulkAction(action);
                           }}
                           disabled={disabled}
                           className={action.destructive ? "text-destructive focus:text-destructive" : ""}
@@ -587,8 +583,9 @@ export function AdminDataTable<T>({
                                 return (
                                   <DropdownMenuItem
                                     key={action.label}
-                                    onClick={() => {
-                                      executeMenuAction(() => runRowAction(action, row));
+                                    onSelect={(event) => {
+                                      event.preventDefault();
+                                      runRowAction(action, row);
                                     }}
                                     disabled={action.disabled}
                                     className={action.destructive ? "text-destructive focus:text-destructive" : ""}

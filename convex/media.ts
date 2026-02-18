@@ -39,10 +39,6 @@ export const getAll = query({
       mediaList = await ctx.db.query("media").collect();
     }
 
-    if (!args.includeInactive) {
-      mediaList = mediaList.filter((item) => item.isActive);
-    }
-
     mediaList.sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt - b.createdAt);
 
     if (args.limit) {
@@ -109,9 +105,7 @@ export const create = mutation({
     const targetVariantsMap = new Map<string, Id<"productVariants">>();
     targetVariantsMap.set(String(variant._id), variant._id);
     for (const related of relatedVariants) {
-      if (related.isActive) {
-        targetVariantsMap.set(String(related._id), related._id);
-      }
+      targetVariantsMap.set(String(related._id), related._id);
     }
     const targetVariantIds = Array.from(targetVariantsMap.values());
 
@@ -130,7 +124,6 @@ export const create = mutation({
 
       const activeMatchingMedia = existingMedia.find(
         (item) =>
-          item.isActive &&
           item.mediaType === args.mediaType &&
           item.filePath.trim() === normalizedFilePath
       );
@@ -151,7 +144,6 @@ export const create = mutation({
           altText: normalizedAltText,
           displayOrder: nextDisplayOrder,
           isPrimary: Boolean(args.isPrimary),
-          isActive: true,
           updatedAt: now,
         });
       } else {
@@ -164,7 +156,6 @@ export const create = mutation({
           altText: normalizedAltText,
           displayOrder: nextDisplayOrder,
           isPrimary: Boolean(args.isPrimary),
-          isActive: true,
           createdAt: now,
           updatedAt: now,
         });
@@ -201,7 +192,6 @@ export const update = mutation({
       altText: v.optional(v.string()),
       displayOrder: v.optional(v.number()),
       isPrimary: v.optional(v.boolean()),
-      isActive: v.optional(v.boolean()),
     }),
   },
   handler: async (ctx, { id, updates }) => {
@@ -237,10 +227,6 @@ export const remove = mutation({
       throw new Error("Media not found");
     }
 
-    await ctx.db.patch(id, {
-      isActive: false,
-      isPrimary: false,
-      updatedAt: Date.now(),
-    });
+    await ctx.db.delete(id);
   },
 });

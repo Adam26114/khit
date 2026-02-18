@@ -1,21 +1,45 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+
+async function deleteVariantCascade(
+  ctx: MutationCtx,
+  variantId: Id<"productVariants">
+) {
+  const [mediaItems, cartItems, wishlistItems] = await Promise.all([
+    ctx.db
+      .query("media")
+      .withIndex("by_variant", (q) => q.eq("variantId", variantId))
+      .collect(),
+    ctx.db.query("cartItems").collect(),
+    ctx.db.query("wishlistItems").collect(),
+  ]);
+
+  for (const media of mediaItems) {
+    await ctx.db.delete(media._id);
+  }
+
+  for (const item of cartItems) {
+    if (item.variantId === variantId) {
+      await ctx.db.delete(item._id);
+    }
+  }
+
+  for (const item of wishlistItems) {
+    if (item.variantId === variantId) {
+      await ctx.db.delete(item._id);
+    }
+  }
+
+  await ctx.db.delete(variantId);
+}
 
 export const getAll = query({
   args: {
     includeInactive: v.optional(v.boolean()),
   },
-  handler: async (ctx, { includeInactive }) => {
-    let sizes;
-    if (includeInactive) {
-      sizes = await ctx.db.query("sizes").collect();
-    } else {
-      sizes = await ctx.db
-        .query("sizes")
-        .withIndex("by_active", (q) => q.eq("isActive", true))
-        .collect();
-    }
-
+  handler: async (ctx) => {
+    const sizes = await ctx.db.query("sizes").collect();
     return sizes.sort(
       (a, b) =>
         a.sizeCategory.localeCompare(b.sizeCategory) ||
@@ -45,7 +69,6 @@ export const create = mutation({
       nameMm: args.nameMm?.trim() || undefined,
       sizeCategory: args.sizeCategory.trim() || "apparel",
       displayOrder: args.displayOrder ?? maxDisplayOrder + 1,
-      isActive: true,
       createdAt: now,
       updatedAt: now,
     });
@@ -60,7 +83,6 @@ export const update = mutation({
       nameMm: v.optional(v.string()),
       sizeCategory: v.optional(v.string()),
       displayOrder: v.optional(v.number()),
-      isActive: v.optional(v.boolean()),
     }),
   },
   handler: async (ctx, { id, updates }) => {
@@ -81,20 +103,24 @@ export const remove = mutation({
   args: {
     id: v.id("sizes"),
   },
-  handler: async (ctx, { id }) => {
-    const inUse = await ctx.db
-      .query("productVariants")
-      .withIndex("by_product_size")
-      .filter((q) => q.eq(q.field("sizeId"), id))
-      .first();
-
-    if (inUse) {
-      throw new Error("Cannot delete size: it is used by product variants");
+  handler: async (ctx, { id }): Promise<{ deletedVariants: number }> => {
+    const existing = await ctx.db.get(id);
+    if (!existing) {
+      throw new Error("Size not found");
     }
 
-    await ctx.db.patch(id, {
-      isActive: false,
-      updatedAt: Date.now(),
-    });
+    const relatedVariants = (await ctx.db.query("productVariants").collect()).filter(
+      (variant) => variant.sizeId === id
+    );
+
+    for (const variant of relatedVariants) {
+      await deleteVariantCascade(ctx, variant._id);
+    }
+
+    await ctx.db.delete(id);
+
+    return {
+      deletedVariants: relatedVariants.length,
+    };
   },
 });

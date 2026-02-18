@@ -6,7 +6,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -26,7 +25,6 @@ interface SizeItem {
   nameMm?: string;
   sizeCategory: string;
   displayOrder: number;
-  isActive: boolean;
 }
 
 const sizeSchema = z.object({
@@ -46,7 +44,6 @@ const sizeSchema = z.object({
 export default function SizesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSize, setEditingSize] = useState<SizeItem | null>(null);
-  const [isActive, setIsActive] = useState(true);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   const sizes = useQuery(api.sizes.getAll, {});
@@ -57,20 +54,17 @@ export default function SizesPage() {
   const resetDialogState = () => {
     setIsDialogOpen(false);
     setEditingSize(null);
-    setIsActive(true);
     setFormErrors({});
   };
 
   const openCreate = () => {
     setEditingSize(null);
-    setIsActive(true);
     setFormErrors({});
     setIsDialogOpen(true);
   };
 
   const openEdit = (size: SizeItem) => {
     setEditingSize(size);
-    setIsActive(size.isActive);
     setFormErrors({});
     setIsDialogOpen(true);
   };
@@ -105,7 +99,6 @@ export default function SizesPage() {
             nameMm: data.nameMm,
             sizeCategory: data.sizeCategory,
             displayOrder: data.displayOrder,
-            isActive,
           },
         });
         notify.updated("Size");
@@ -224,13 +217,6 @@ export default function SizesPage() {
             cell: (size) => size.sizeCategory,
           },
           { id: "order", header: "Order", cell: (size) => size.displayOrder },
-          {
-            id: "active",
-            header: "Active",
-            defaultHidden: true,
-            searchAccessor: (size) => (size.isActive ? "active" : "inactive"),
-            cell: (size) => (size.isActive ? "Yes" : "No"),
-          },
         ] satisfies AdminTableColumn<SizeItem>[]}
       />
 
@@ -306,13 +292,6 @@ export default function SizesPage() {
                 </FieldDescription>
               </Field>
             </div>
-
-            {editingSize && (
-              <div className="flex items-center space-x-2">
-                <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
-                <FieldLabel htmlFor="isActive">Active</FieldLabel>
-              </div>
-            )}
 
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={resetDialogState}>

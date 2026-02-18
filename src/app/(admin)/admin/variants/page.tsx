@@ -53,7 +53,6 @@ interface VariantItem {
   stockQuantity: number;
   displayOrder: number;
   isPrimary: boolean;
-  isActive: boolean;
   productName: string;
   colorName: string;
   colorHex: string;
@@ -97,7 +96,6 @@ export default function VariantsPage() {
   const [selectedColorId, setSelectedColorId] = useState("");
   const [selectedSizeId, setSelectedSizeId] = useState("");
   const [isPrimary, setIsPrimary] = useState(false);
-  const [isActive, setIsActive] = useState(true);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   const variants = useQuery(api.variants.getAll, {});
@@ -121,7 +119,6 @@ export default function VariantsPage() {
     setSelectedColorId("");
     setSelectedSizeId("");
     setIsPrimary(false);
-    setIsActive(true);
     setFormErrors({});
   };
 
@@ -131,7 +128,6 @@ export default function VariantsPage() {
     setSelectedColorId(colorOptions[0]?._id || "");
     setSelectedSizeId(sizeOptions[0]?._id || "");
     setIsPrimary(false);
-    setIsActive(true);
     setFormErrors({});
     setIsDialogOpen(true);
   };
@@ -142,7 +138,6 @@ export default function VariantsPage() {
     setSelectedColorId(variant.colorId);
     setSelectedSizeId(variant.sizeId);
     setIsPrimary(variant.isPrimary);
-    setIsActive(variant.isActive);
     setFormErrors({});
     setIsDialogOpen(true);
   };
@@ -187,7 +182,6 @@ export default function VariantsPage() {
             stockQuantity: data.stockQuantity,
             displayOrder: data.displayOrder,
             isPrimary,
-            isActive,
           },
         });
         notify.updated("Variant");
@@ -504,12 +498,6 @@ export default function VariantsPage() {
                   <Switch id="isPrimary" checked={isPrimary} onCheckedChange={setIsPrimary} />
                   <FieldLabel htmlFor="isPrimary">Primary</FieldLabel>
                 </div>
-                {editingVariant && (
-                  <div className="flex items-center gap-2">
-                    <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
-                    <FieldLabel htmlFor="isActive">Active</FieldLabel>
-                  </div>
-                )}
               </div>
             </div>
 

@@ -1,21 +1,45 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+
+async function deleteVariantCascade(
+  ctx: MutationCtx,
+  variantId: Id<"productVariants">
+) {
+  const [mediaItems, cartItems, wishlistItems] = await Promise.all([
+    ctx.db
+      .query("media")
+      .withIndex("by_variant", (q) => q.eq("variantId", variantId))
+      .collect(),
+    ctx.db.query("cartItems").collect(),
+    ctx.db.query("wishlistItems").collect(),
+  ]);
+
+  for (const media of mediaItems) {
+    await ctx.db.delete(media._id);
+  }
+
+  for (const item of cartItems) {
+    if (item.variantId === variantId) {
+      await ctx.db.delete(item._id);
+    }
+  }
+
+  for (const item of wishlistItems) {
+    if (item.variantId === variantId) {
+      await ctx.db.delete(item._id);
+    }
+  }
+
+  await ctx.db.delete(variantId);
+}
 
 export const getAll = query({
   args: {
     includeInactive: v.optional(v.boolean()),
   },
-  handler: async (ctx, { includeInactive }) => {
-    let colors;
-    if (includeInactive) {
-      colors = await ctx.db.query("colors").collect();
-    } else {
-      colors = await ctx.db
-        .query("colors")
-        .withIndex("by_active", (q) => q.eq("isActive", true))
-        .collect();
-    }
-
+  handler: async (ctx) => {
+    const colors = await ctx.db.query("colors").collect();
     return colors.sort(
       (a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name)
     );
@@ -42,7 +66,6 @@ export const create = mutation({
       nameMm: args.nameMm?.trim() || undefined,
       hexCode: args.hexCode.trim() || "#111111",
       displayOrder: args.displayOrder ?? maxDisplayOrder + 1,
-      isActive: true,
       createdAt: now,
       updatedAt: now,
     });
@@ -57,7 +80,6 @@ export const update = mutation({
       nameMm: v.optional(v.string()),
       hexCode: v.optional(v.string()),
       displayOrder: v.optional(v.number()),
-      isActive: v.optional(v.boolean()),
     }),
   },
   handler: async (ctx, { id, updates }) => {
@@ -77,20 +99,24 @@ export const remove = mutation({
   args: {
     id: v.id("colors"),
   },
-  handler: async (ctx, { id }) => {
-    const inUse = await ctx.db
-      .query("productVariants")
-      .withIndex("by_product_color")
-      .filter((q) => q.eq(q.field("colorId"), id))
-      .first();
-
-    if (inUse) {
-      throw new Error("Cannot delete color: it is used by product variants");
+  handler: async (ctx, { id }): Promise<{ deletedVariants: number }> => {
+    const existing = await ctx.db.get(id);
+    if (!existing) {
+      throw new Error("Color not found");
     }
 
-    await ctx.db.patch(id, {
-      isActive: false,
-      updatedAt: Date.now(),
-    });
+    const relatedVariants = (await ctx.db.query("productVariants").collect()).filter(
+      (variant) => variant.colorId === id
+    );
+
+    for (const variant of relatedVariants) {
+      await deleteVariantCascade(ctx, variant._id);
+    }
+
+    await ctx.db.delete(id);
+
+    return {
+      deletedVariants: relatedVariants.length,
+    };
   },
 });

@@ -39,10 +39,6 @@ export const getAll = query({
       variants = await ctx.db.query("productVariants").collect();
     }
 
-    if (!args.includeInactive) {
-      variants = variants.filter((variant) => variant.isActive);
-    }
-
     variants.sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt - b.createdAt);
 
     if (args.limit) {
@@ -59,14 +55,13 @@ export const getAll = query({
 
         mediaCountByVariant.set(
           String(variant._id),
-          media.filter((item) => item.isActive).length
+          media.length
         );
       })
     );
 
     const colorGroupVariantIds = new Map<string, string[]>();
     for (const variant of variants) {
-      if (!variant.isActive) continue;
       const groupKey = `${String(variant.productId)}:${String(variant.colorId)}`;
       const existing = colorGroupVariantIds.get(groupKey) || [];
       existing.push(String(variant._id));
@@ -127,12 +122,12 @@ export const create = mutation({
       ctx.db.get(args.sizeId),
     ]);
 
-    if (!color || !color.isActive) {
-      throw new Error("Color not found or inactive");
+    if (!color) {
+      throw new Error("Color not found");
     }
 
-    if (!size || !size.isActive) {
-      throw new Error("Size not found or inactive");
+    if (!size) {
+      throw new Error("Size not found");
     }
 
     const existingForColor = await ctx.db
@@ -177,7 +172,6 @@ export const create = mutation({
       stockQuantity: Math.max(0, args.stockQuantity),
       displayOrder: args.displayOrder ?? maxDisplayOrder + 1,
       isPrimary: Boolean(args.isPrimary),
-      isActive: true,
       createdAt: now,
       updatedAt: now,
     });
@@ -196,7 +190,6 @@ export const update = mutation({
       stockQuantity: v.optional(v.number()),
       displayOrder: v.optional(v.number()),
       isPrimary: v.optional(v.boolean()),
-      isActive: v.optional(v.boolean()),
     }),
   },
   handler: async (ctx, { id, updates }) => {
@@ -260,10 +253,50 @@ export const remove = mutation({
       throw new Error("Variant not found");
     }
 
-    await ctx.db.patch(id, {
-      isActive: false,
-      isPrimary: false,
-      updatedAt: Date.now(),
-    });
+    const [mediaItems, cartItems, wishlistItems] = await Promise.all([
+      ctx.db
+        .query("media")
+        .withIndex("by_variant", (q) => q.eq("variantId", id))
+        .collect(),
+      ctx.db.query("cartItems").collect(),
+      ctx.db.query("wishlistItems").collect(),
+    ]);
+
+    for (const media of mediaItems) {
+      await ctx.db.delete(media._id);
+    }
+
+    for (const item of cartItems) {
+      if (item.variantId === id) {
+        await ctx.db.delete(item._id);
+      }
+    }
+
+    for (const item of wishlistItems) {
+      if (item.variantId === id) {
+        await ctx.db.delete(item._id);
+      }
+    }
+
+    await ctx.db.delete(id);
+
+    if (variant.isPrimary) {
+      const remainingVariants = await ctx.db
+        .query("productVariants")
+        .withIndex("by_product", (q) => q.eq("productId", variant.productId))
+        .collect();
+
+      remainingVariants.sort(
+        (a, b) => a.displayOrder - b.displayOrder || a.createdAt - b.createdAt
+      );
+
+      const nextPrimary = remainingVariants[0];
+      if (nextPrimary) {
+        await ctx.db.patch(nextPrimary._id, {
+          isPrimary: true,
+          updatedAt: Date.now(),
+        });
+      }
+    }
   },
 });

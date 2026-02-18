@@ -47,7 +47,6 @@ interface MediaItem {
   altText?: string;
   displayOrder: number;
   isPrimary: boolean;
-  isActive: boolean;
   productName: string;
   variantSku: string;
   colorName: string;
@@ -73,7 +72,6 @@ export default function MediaPage() {
   const [selectedVariantId, setSelectedVariantId] = useState("");
   const [mediaType, setMediaType] = useState<"image" | "video">("image");
   const [isPrimary, setIsPrimary] = useState(false);
-  const [isActive, setIsActive] = useState(true);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const [uploadedPreviews, setUploadedPreviews] = useState<Record<string, string>>({});
   const [fileUrl, setFileUrl] = useState("");
@@ -95,7 +93,6 @@ export default function MediaPage() {
     setSelectedVariantId("");
     setMediaType("image");
     setIsPrimary(false);
-    setIsActive(true);
     setUploadedFiles([]);
     setUploadedPreviews({});
     setFileUrl("");
@@ -107,7 +104,6 @@ export default function MediaPage() {
     setSelectedVariantId(variantOptions[0]?._id || "");
     setMediaType("image");
     setIsPrimary(false);
-    setIsActive(true);
     setUploadedFiles([]);
     setUploadedPreviews({});
     setFileUrl("");
@@ -120,7 +116,6 @@ export default function MediaPage() {
     setSelectedVariantId(media.variantId);
     setMediaType(media.mediaType);
     setIsPrimary(media.isPrimary);
-    setIsActive(media.isActive);
     setUploadedFiles([media.filePath]);
     setUploadedPreviews({
       [media.filePath]: resolveImageSrc(media.fileUrl || media.filePath),
@@ -170,7 +165,6 @@ export default function MediaPage() {
             altText: data.altText,
             displayOrder: data.displayOrder,
             isPrimary,
-            isActive,
           },
         });
         notify.updated("Media");
@@ -415,7 +409,7 @@ export default function MediaPage() {
                 successMessage="Media uploaded successfully"
               />
               <p className="text-xs text-muted-foreground">
-                Media uploads are auto-linked to all active variants with the same
+                Media uploads are auto-linked to all variants with the same
                 product + color (all sizes).
               </p>
             </div>
@@ -499,12 +493,6 @@ export default function MediaPage() {
                 <Switch id="isPrimary" checked={isPrimary} onCheckedChange={setIsPrimary} />
                 <FieldLabel htmlFor="isPrimary">Primary</FieldLabel>
               </div>
-              {editingMedia && (
-                <div className="flex items-center gap-2">
-                  <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
-                  <FieldLabel htmlFor="isActive">Active</FieldLabel>
-                </div>
-              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
