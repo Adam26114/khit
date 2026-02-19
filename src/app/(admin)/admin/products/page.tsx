@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
@@ -54,7 +54,12 @@ interface Product {
   categoryId: string;
 }
 
-const availableSizes = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
+interface SizeOption {
+  _id: string;
+  name: string;
+  sizeCategory: string;
+  displayOrder: number;
+}
 
 const optionalNonNegativeNumber = z.preprocess(
   (value) => {
@@ -124,10 +129,40 @@ export default function ProductsPage() {
 
   const products = useQuery(api.products.getAll, {});
   const categories = useQuery(api.categories.getActive);
+  const sizes = useQuery(api.sizes.getAll, {});
   const createProduct = useMutation(api.products.create);
   const updateProduct = useMutation(api.products.update);
   const removeProduct = useMutation(api.products.remove);
   const generateUploadUrl = useMutation(api.products.generateUploadUrl);
+
+  const availableSizes = useMemo(() => {
+    const uniqueByName = new Map<string, SizeOption>();
+    for (const size of (sizes as SizeOption[] | undefined) ?? []) {
+      const normalizedName = size.name.trim().toUpperCase();
+      if (!normalizedName || uniqueByName.has(normalizedName)) continue;
+      uniqueByName.set(normalizedName, {
+        ...size,
+        name: normalizedName,
+      });
+    }
+    return Array.from(uniqueByName.values());
+  }, [sizes]);
+
+  const groupedSizes = useMemo(() => {
+    const grouped = new Map<string, SizeOption[]>();
+    for (const size of availableSizes) {
+      const category = (size.sizeCategory || "apparel").trim().toLowerCase();
+      const items = grouped.get(category) ?? [];
+      items.push(size);
+      grouped.set(category, items);
+    }
+    return Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [availableSizes]);
+
+  useEffect(() => {
+    const allowed = new Set(availableSizes.map((size) => size.name));
+    setSelectedSizes((previous) => previous.filter((size) => allowed.has(size)));
+  }, [availableSizes]);
 
   const clearBlobPreviews = (previewMap: Record<string, string>) => {
     Object.values(previewMap).forEach((url) => {
@@ -158,8 +193,15 @@ export default function ProductsPage() {
   };
 
   const openEdit = (product: Product) => {
+    const availableSizeNameSet = new Set(availableSizes.map((size) => size.name));
+    const normalizedProductSizes = (product.sizes || [])
+      .map((size) => size.trim().toUpperCase())
+      .filter(Boolean);
+
     setEditingProduct(product);
-    setSelectedSizes(product.sizes || []);
+    setSelectedSizes(
+      normalizedProductSizes.filter((size) => availableSizeNameSet.has(size))
+    );
     setColorVariants(product.colors || []);
 
     const imageRefs = product.imageRefs?.length ? product.imageRefs : product.images || [];
@@ -298,7 +340,7 @@ export default function ProductsPage() {
     }
   };
 
-  if (products === undefined || categories === undefined) {
+  if (products === undefined || categories === undefined || sizes === undefined) {
     return (
       <div>
         <h1 className="text-3xl font-bold mb-8">Products</h1>
@@ -521,23 +563,40 @@ export default function ProductsPage() {
 
             <Field invalid={Boolean(formErrors.sizes)}>
               <FieldLabel>Sizes</FieldLabel>
-              <div className="flex flex-wrap gap-2">
-                {availableSizes.map((size) => (
-                  <Button
-                    key={size}
-                    type="button"
-                    variant={selectedSizes.includes(size) ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setSelectedSizes((prev) =>
-                        prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
-                      );
-                    }}
-                  >
-                    {size}
-                  </Button>
-                ))}
-              </div>
+              {availableSizes.length === 0 ? (
+                <div className="rounded-md border border-dashed px-3 py-3 text-sm text-muted-foreground">
+                  No sizes found. Create sizes in Catalog Tools → Sizes first.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {groupedSizes.map(([category, categorySizes]) => (
+                    <div key={category} className="space-y-2">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {category}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {categorySizes.map((size) => (
+                          <Button
+                            key={size._id}
+                            type="button"
+                            variant={selectedSizes.includes(size.name) ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              setSelectedSizes((prev) =>
+                                prev.includes(size.name)
+                                  ? prev.filter((value) => value !== size.name)
+                                  : [...prev, size.name]
+                              );
+                            }}
+                          >
+                            {size.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <FieldDescription className={!formErrors.sizes ? "invisible" : undefined}>
                 {formErrors.sizes ?? " "}
               </FieldDescription>
@@ -585,7 +644,9 @@ export default function ProductsPage() {
               <Button type="button" variant="outline" onClick={resetDialogState}>
                 Cancel
               </Button>
-              <Button type="submit">{editingProduct ? "Update" : "Create"} Product</Button>
+              <Button type="submit" disabled={availableSizes.length === 0}>
+                {editingProduct ? "Update" : "Create"} Product
+              </Button>
             </div>
           </form>
         </DialogContent>
