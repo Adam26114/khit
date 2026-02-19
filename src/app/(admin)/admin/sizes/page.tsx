@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
@@ -13,6 +13,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Pencil, Plus, Ruler, Trash2 } from "lucide-react";
 import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
@@ -26,6 +33,15 @@ interface SizeItem {
   sizeCategory: string;
   displayOrder: number;
 }
+
+const DEFAULT_SIZE_CATEGORIES = [
+  "apparel",
+  "t-shirt",
+  "pants",
+  "outerwear",
+  "footwear",
+  "accessories",
+];
 
 const sizeSchema = z.object({
   name: z.string().trim().min(1, "Size is required").max(20, "Size is too long"),
@@ -45,27 +61,50 @@ export default function SizesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSize, setEditingSize] = useState<SizeItem | null>(null);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [selectedCategory, setSelectedCategory] = useState(DEFAULT_SIZE_CATEGORIES[0]);
 
   const sizes = useQuery(api.sizes.getAll, {});
   const createSize = useMutation(api.sizes.create);
   const updateSize = useMutation(api.sizes.update);
   const removeSize = useMutation(api.sizes.remove);
 
+  const sizeCategoryOptions = useMemo(() => {
+    const categories = new Set(DEFAULT_SIZE_CATEGORIES);
+    for (const size of (sizes as SizeItem[] | undefined) ?? []) {
+      const category = size.sizeCategory.trim().toLowerCase();
+      if (!category) continue;
+      categories.add(category);
+    }
+    if (editingSize?.sizeCategory?.trim()) {
+      categories.add(editingSize.sizeCategory.trim().toLowerCase());
+    }
+    return Array.from(categories).sort((a, b) => a.localeCompare(b));
+  }, [editingSize?.sizeCategory, sizes]);
+
+  useEffect(() => {
+    if (!selectedCategory || !sizeCategoryOptions.includes(selectedCategory)) {
+      setSelectedCategory(sizeCategoryOptions[0] ?? DEFAULT_SIZE_CATEGORIES[0]);
+    }
+  }, [selectedCategory, sizeCategoryOptions]);
+
   const resetDialogState = () => {
     setIsDialogOpen(false);
     setEditingSize(null);
     setFormErrors({});
+    setSelectedCategory(DEFAULT_SIZE_CATEGORIES[0]);
   };
 
   const openCreate = () => {
     setEditingSize(null);
     setFormErrors({});
+    setSelectedCategory(sizeCategoryOptions[0] ?? DEFAULT_SIZE_CATEGORIES[0]);
     setIsDialogOpen(true);
   };
 
   const openEdit = (size: SizeItem) => {
     setEditingSize(size);
     setFormErrors({});
+    setSelectedCategory(size.sizeCategory.trim().toLowerCase());
     setIsDialogOpen(true);
   };
 
@@ -76,7 +115,7 @@ export default function SizesPage() {
     const parsed = sizeSchema.safeParse({
       name: String(formData.get("name") ?? "").trim().toUpperCase(),
       nameMm: String(formData.get("nameMm") ?? "").trim() || undefined,
-      sizeCategory: String(formData.get("sizeCategory") ?? "").trim(),
+      sizeCategory: selectedCategory,
       displayOrder: formData.get("displayOrder") ?? "0",
     });
 
@@ -267,13 +306,21 @@ export default function SizesPage() {
             <div className="grid grid-cols-2 items-start gap-4">
               <Field invalid={Boolean(formErrors.sizeCategory)}>
                 <FieldLabel htmlFor="sizeCategory">Category *</FieldLabel>
-                <Input
-                  id="sizeCategory"
-                  name="sizeCategory"
-                  defaultValue={editingSize?.sizeCategory || "apparel"}
-                  aria-invalid={Boolean(formErrors.sizeCategory)}
-                  required
-                />
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger
+                    id="sizeCategory"
+                    aria-invalid={Boolean(formErrors.sizeCategory)}
+                  >
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sizeCategoryOptions.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FieldDescription className={!formErrors.sizeCategory ? "invisible" : undefined}>
                   {formErrors.sizeCategory ?? " "}
                 </FieldDescription>
