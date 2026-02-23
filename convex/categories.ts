@@ -2,46 +2,22 @@ import { v } from "convex/values";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
-async function deleteVariantCascade(
-  ctx: MutationCtx,
-  variantId: Id<"productVariants">
-) {
-  const [mediaItems, cartItems, wishlistItems] = await Promise.all([
-    ctx.db
-      .query("media")
-      .withIndex("by_variant", (q) => q.eq("variantId", variantId))
-      .collect(),
+async function deleteProductCascade(ctx: MutationCtx, productId: Id<"products">) {
+  const [cartItems, wishlistItems] = await Promise.all([
     ctx.db.query("cartItems").collect(),
     ctx.db.query("wishlistItems").collect(),
   ]);
 
-  for (const media of mediaItems) {
-    await ctx.db.delete(media._id);
-  }
-
   for (const item of cartItems) {
-    if (item.variantId === variantId) {
+    if (String(item.productId) === String(productId)) {
       await ctx.db.delete(item._id);
     }
   }
 
   for (const item of wishlistItems) {
-    if (item.variantId === variantId) {
+    if (String(item.productId) === String(productId)) {
       await ctx.db.delete(item._id);
     }
-  }
-
-  await ctx.db.delete(variantId);
-}
-
-async function deleteProductCascade(ctx: MutationCtx, productId: Id<"products">) {
-  const variants = await ctx.db
-    .query("productVariants")
-    .withIndex("by_product", (q) => q.eq("productId", productId))
-    .collect();
-
-  for (const variant of variants) {
-    await deleteVariantCascade(ctx, variant._id);
   }
 
   await ctx.db.delete(productId);
@@ -72,7 +48,6 @@ async function collectCategoryTree(
   return result;
 }
 
-// Get all categories
 export const getActive = query({
   args: {},
   handler: async (ctx) => {
@@ -83,7 +58,6 @@ export const getActive = query({
   },
 });
 
-// Get category by slug
 export const getBySlug = query({
   args: { slug: v.string() },
   handler: async (ctx, { slug }) => {
@@ -96,7 +70,6 @@ export const getBySlug = query({
   },
 });
 
-// Get categories by parent
 export const getByParent = query({
   args: { parentId: v.optional(v.id("categories")) },
   handler: async (ctx, { parentId }) => {
@@ -110,7 +83,6 @@ export const getByParent = query({
         (a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt
       );
     } else {
-      // Get root categories (no parent)
       const categories = await ctx.db
         .query("categories")
         .filter((q) => q.eq(q.field("parentId"), undefined))
@@ -123,7 +95,6 @@ export const getByParent = query({
   },
 });
 
-// Create category
 export const create = mutation({
   args: {
     name: v.string(),
@@ -143,7 +114,6 @@ export const create = mutation({
   },
 });
 
-// Update category
 export const update = mutation({
   args: {
     id: v.id("categories"),
@@ -168,7 +138,6 @@ export const update = mutation({
   },
 });
 
-// Delete category and dependent data.
 export const remove = mutation({
   args: { id: v.id("categories") },
   handler: async (ctx, { id }): Promise<{ deletedCategories: number; deletedProducts: number }> => {

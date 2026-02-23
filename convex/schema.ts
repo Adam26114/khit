@@ -1,6 +1,24 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+const sizeMeasurementFields = v.object({
+  shoulder: v.optional(v.number()),
+  chest: v.optional(v.number()),
+  sleeve: v.optional(v.number()),
+  waist: v.optional(v.number()),
+  length: v.optional(v.number()),
+});
+
+const colorVariantSchema = v.object({
+  id: v.string(),
+  colorName: v.string(),
+  colorHex: v.string(),
+  images: v.array(v.string()),
+  selectedSizes: v.array(v.string()),
+  stock: v.record(v.string(), v.number()),
+  measurements: v.record(v.string(), sizeMeasurementFields),
+});
+
 export default defineSchema({
   users: defineTable({
     email: v.string(),
@@ -28,32 +46,6 @@ export default defineSchema({
     .index("by_parent", ["parentId"])
     .index("by_active", ["isActive"]),
 
-  colors: defineTable({
-    name: v.string(),
-    nameMm: v.optional(v.string()),
-    hexCode: v.string(),
-    displayOrder: v.number(),
-    isActive: v.optional(v.boolean()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_name", ["name"])
-    .index("by_hexCode", ["hexCode"])
-    .index("by_active", ["isActive"]),
-
-  sizes: defineTable({
-    name: v.string(),
-    nameMm: v.optional(v.string()),
-    sizeCategory: v.string(),
-    displayOrder: v.number(),
-    isActive: v.optional(v.boolean()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_name", ["name"])
-    .index("by_category", ["sizeCategory"])
-    .index("by_active", ["isActive"]),
-
   products: defineTable({
     sku: v.optional(v.string()),
     name: v.string(),
@@ -66,10 +58,10 @@ export default defineSchema({
     salePrice: v.optional(v.number()),
     isFeatured: v.boolean(),
     isPublished: v.optional(v.boolean()),
-    isActive: v.boolean(),
+    isActive: v.optional(v.boolean()),
     careInstructions: v.optional(v.string()),
     sizeFit: v.optional(v.string()),
-    // Legacy compatibility fields to support gradual migration.
+    // Legacy fields for backward compatibility
     price: v.optional(v.number()),
     images: v.optional(v.array(v.string())),
     sizes: v.optional(v.array(v.string())),
@@ -80,6 +72,8 @@ export default defineSchema({
     }))),
     stock: v.optional(v.number()),
     isOutOfStock: v.optional(v.boolean()),
+    // New schema
+    colorVariants: v.optional(v.array(colorVariantSchema)),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -89,60 +83,27 @@ export default defineSchema({
     .index("by_featured", ["isFeatured"])
     .index("by_active", ["isActive"]),
 
-  productVariants: defineTable({
-    productId: v.id("products"),
-    colorId: v.id("colors"),
-    sizeId: v.id("sizes"),
-    skuVariant: v.string(),
-    priceOverride: v.optional(v.number()),
-    stockQuantity: v.number(),
-    displayOrder: v.number(),
-    isPrimary: v.boolean(),
-    isActive: v.optional(v.boolean()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_product", ["productId"])
-    .index("by_product_color", ["productId", "colorId"])
-    .index("by_product_size", ["productId", "sizeId"])
-    .index("by_sku_variant", ["skuVariant"])
-    .index("by_active", ["isActive"]),
-
-  media: defineTable({
-    variantId: v.id("productVariants"),
-    mediaType: v.union(v.literal("image"), v.literal("video")),
-    filePath: v.string(),
-    fileUrl: v.optional(v.string()),
-    thumbnailUrl: v.optional(v.string()),
-    altText: v.optional(v.string()),
-    displayOrder: v.number(),
-    isPrimary: v.boolean(),
-    isActive: v.optional(v.boolean()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_variant", ["variantId"])
-    .index("by_variant_display", ["variantId", "displayOrder"])
-    .index("by_variant_primary", ["variantId", "isPrimary"])
-    .index("by_active", ["isActive"]),
-
   cartItems: defineTable({
     userId: v.id("users"),
-    variantId: v.id("productVariants"),
+    productId: v.id("products"),
+    colorVariantId: v.string(),
+    size: v.string(),
     quantity: v.number(),
     addedAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_variant", ["userId", "variantId"]),
+    .index("by_user_product_size", ["userId", "productId", "colorVariantId", "size"]),
 
   wishlistItems: defineTable({
     userId: v.id("users"),
-    variantId: v.id("productVariants"),
+    productId: v.id("products"),
+    colorVariantId: v.optional(v.string()),
+    size: v.optional(v.string()),
     addedAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_variant", ["userId", "variantId"]),
+    .index("by_user_product", ["userId", "productId"]),
 
   orders: defineTable({
     orderNumber: v.string(),
@@ -155,7 +116,7 @@ export default defineSchema({
     }),
     items: v.array(v.object({
       productId: v.id("products"),
-      variantId: v.optional(v.id("productVariants")),
+      colorVariantId: v.optional(v.string()),
       name: v.string(),
       size: v.string(),
       color: v.string(),

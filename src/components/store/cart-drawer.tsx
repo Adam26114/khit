@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/providers/cart-provider";
-import { Minus, Plus, Trash, ShoppingBag } from "@/components/solar-icons";
+import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import { resolveImageSrc } from "@/lib/image";
 
 export function CartDrawer() {
@@ -30,7 +30,7 @@ export function CartDrawer() {
       <SheetContent className="w-full sm:max-w-lg flex flex-col">
         <SheetHeader className="border-b pb-4">
           <SheetTitle className="text-lg font-medium flex items-center gap-2">
-            <ShoppingBag size={20} weight="duotone" />
+            <ShoppingBag size={20} />
             Your Bag ({items.length} items)
           </SheetTitle>
         </SheetHeader>
@@ -38,7 +38,7 @@ export function CartDrawer() {
         {items.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12">
             <div className="text-gray-300">
-              <ShoppingBag size={64} weight="duotone" />
+              <ShoppingBag size={64} />
             </div>
             <p className="text-gray-500">Your bag is empty</p>
             <Button onClick={() => setIsOpen(false)} variant="outline">
@@ -98,7 +98,7 @@ export function CartDrawer() {
                           )
                         }
                       >
-                        <Minus size={12} />
+                        <Minus className="h-4 w-4" />
                       </Button>
                       <span className="w-8 text-center text-sm">
                         {item.quantity}
@@ -116,7 +116,7 @@ export function CartDrawer() {
                           )
                         }
                       >
-                        <Plus size={12} />
+                        <Plus className="h-4 w-4" />
                       </Button>
 
                       <Button
@@ -127,7 +127,7 @@ export function CartDrawer() {
                           removeItem(item.productId, item.size, item.color)
                         }
                       >
-                        <Trash size={16} weight="duotone" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>

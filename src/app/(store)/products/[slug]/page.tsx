@@ -24,6 +24,7 @@ import {
   buildSizeOptionsForColor,
   getDisplayImagesForSelection,
   getSelectedVariant,
+  getSizeStock,
   normalizeProductVariants,
 } from "@/lib/product-variants";
 
@@ -62,8 +63,8 @@ export default function ProductPage({ params }: PageProps) {
     [variants, selectedColorId, product?.sizes]
   );
   const selectedVariant = useMemo(
-    () => getSelectedVariant(variants, selectedColorId, selectedSize),
-    [variants, selectedColorId, selectedSize]
+    () => getSelectedVariant(variants, selectedColorId),
+    [variants, selectedColorId]
   );
   const displayImages = useMemo(
     () =>
@@ -77,12 +78,14 @@ export default function ProductPage({ params }: PageProps) {
   );
   const selectedColor = colorOptions.find((color) => color.id === selectedColorId);
   const currentImageSrc = displayImages[selectedImage] || displayImages[0] || "";
+
+  // Per-size stock for the selected color variant.
+  const selectedSizeStock = getSizeStock(selectedVariant, selectedSize);
   const effectivePrice =
     selectedVariant?.price ?? product?.salePrice ?? product?.price ?? 0;
-  const selectedStock = selectedVariant?.stock ?? selectedColor?.stock ?? 0;
   const isSelectionOutOfStock =
     variants.length > 0
-      ? selectedStock <= 0
+      ? selectedSizeStock <= 0
       : Boolean(product?.isOutOfStock);
 
   useEffect(() => {
@@ -293,7 +296,7 @@ export default function ProductPage({ params }: PageProps) {
             )}
           </div>
 
-          {/* Color Selector */}
+          {/* Color Selector — MANGO-style squares */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-medium">Color</span>
@@ -301,7 +304,7 @@ export default function ProductPage({ params }: PageProps) {
                 {selectedColor?.name || "Select a color"}
               </span>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               {colorOptions.map((color) => (
                 <button
                   key={color.id}
@@ -309,10 +312,10 @@ export default function ProductPage({ params }: PageProps) {
                     setSelectedColorId(color.id);
                     setSelectedImage(0);
                   }}
-                  className={`w-10 h-10 rounded-full border-2 ${
+                  className={`w-8 h-8 border-2 ${
                     selectedColorId === color.id
                       ? "border-black"
-                      : "border-gray-300"
+                      : "border-[#E5E5E5]"
                   }`}
                   style={{ backgroundColor: color.hex }}
                   title={color.name}
@@ -321,7 +324,7 @@ export default function ProductPage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* Size Selector */}
+          {/* Size Selector — filtered by selected color */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-medium">Size</span>
@@ -331,23 +334,21 @@ export default function ProductPage({ params }: PageProps) {
             </div>
             <div className="flex flex-wrap gap-2">
               {sizeOptions.map((size) => {
-                const sizeVariant = getSelectedVariant(variants, selectedColorId, size);
-                const isSizeOutOfStock =
-                  variants.length > 0 ? (sizeVariant?.stock ?? 0) <= 0 : false;
+                const sizeStock = getSizeStock(selectedVariant, size);
+                const isSizeOutOfStock = variants.length > 0 ? sizeStock <= 0 : false;
 
                 return (
                   <button
                     key={size}
                     onClick={() => {
                       setSelectedSize(size);
-                      setSelectedImage(0);
                     }}
                     disabled={isSizeOutOfStock}
                     className={`w-12 h-12 border text-sm font-medium transition-colors ${
                       selectedSize === size
                         ? "border-black bg-black text-white"
                         : "border-gray-300 hover:border-gray-400"
-                    } ${isSizeOutOfStock ? "cursor-not-allowed opacity-40" : ""}`}
+                    } ${isSizeOutOfStock ? "cursor-not-allowed opacity-40 line-through" : ""}`}
                   >
                     {size}
                   </button>
@@ -357,9 +358,9 @@ export default function ProductPage({ params }: PageProps) {
           </div>
 
           {/* Stock Indicator */}
-          {selectedStock < 5 && selectedStock > 0 && (
+          {selectedSizeStock < 5 && selectedSizeStock > 0 && (
             <p className="text-sm text-orange-600 mb-4">
-              Only {selectedStock} left in stock
+              Only {selectedSizeStock} left in stock
             </p>
           )}
 

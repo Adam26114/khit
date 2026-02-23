@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import {
-  MagnifyingGlass,
+  Search,
   ShoppingBag,
   User,
-  List,
+  Menu,
   X,
-} from "@/components/solar-icons";
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/providers/cart-provider";
@@ -36,7 +36,7 @@ export function StoreHeader() {
             <Sheet>
               <SheetTrigger asChild className="lg:hidden">
                 <Button variant="ghost" size="icon" className="h-10 w-10">
-                  <List size={24} weight="duotone" />
+                  <Menu size={24} />
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-[300px] p-0">
@@ -90,11 +90,11 @@ export function StoreHeader() {
                 className="h-10 w-10"
                 onClick={() => setIsSearchOpen(true)}
               >
-                <MagnifyingGlass size={24} weight="duotone" />
+                <Search size={24} />
               </Button>
               <Link href={session ? "/account" : "/login"}>
                 <Button variant="ghost" size="icon" className="h-10 w-10">
-                  <User size={24} weight="duotone" />
+                  <User size={24} />
                 </Button>
               </Link>
               <Button
@@ -103,7 +103,7 @@ export function StoreHeader() {
                 className="h-10 w-10 relative"
                 onClick={() => setCartOpen(true)}
               >
-                <ShoppingBag size={24} weight="duotone" />
+                <ShoppingBag size={20} />
                 {totalItems > 0 && (
                   <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-black text-white text-xs flex items-center justify-center">
                     {totalItems > 99 ? "99+" : totalItems}
@@ -142,9 +142,8 @@ export function StoreHeader() {
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center gap-4">
               <div className="text-gray-400">
-                <MagnifyingGlass
+                <Search
                   size={24}
-                  weight="duotone"
                 />
               </div>
               <input
@@ -158,7 +157,7 @@ export function StoreHeader() {
                 size="icon"
                 onClick={() => setIsSearchOpen(false)}
               >
-                <X size={24} weight="duotone" />
+                <X size={24} />
               </Button>
             </div>
           </div>

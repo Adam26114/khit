@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Package } from "@/components/solar-icons";
+import { ArrowRight, Package } from "lucide-react";
 import { ProductCard } from "@/components/store/product-card";
 import { useQuery, api } from "@/lib/convex";
 import { Skeleton } from "@/components/ui/skeleton";

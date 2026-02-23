@@ -5,11 +5,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
-  Storefront,
+  Store,
   Truck,
-  Money,
-  Lock,
-} from "@/components/solar-icons";
+  Banknote,
+  Heart,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -155,7 +155,7 @@ export default function CheckoutPage() {
                         htmlFor="shipping"
                         className="flex items-center gap-2 font-medium cursor-pointer"
                       >
-                        <Truck size={20} weight="duotone" />
+                        <Truck size={20} />
                         Delivery to Your Address
                       </Label>
                       <p className="text-sm text-gray-600 mt-1">
@@ -179,7 +179,7 @@ export default function CheckoutPage() {
                         htmlFor="pickup"
                         className="flex items-center gap-2 font-medium cursor-pointer"
                       >
-                        <Storefront size={20} weight="duotone" />
+                        <Store size={20} />
                         Store Pickup
                       </Label>
                       <p className="text-sm text-gray-600 mt-1">
@@ -295,7 +295,7 @@ export default function CheckoutPage() {
               <h2 className="text-lg font-medium mb-4">Payment Method</h2>
               <div className="border border-black rounded p-4">
                 <div className="flex items-center gap-3">
-                  <Money size={20} weight="duotone" />
+                  <Banknote size={20} />
                   <div>
                     <p className="font-medium">Cash on Delivery</p>
                     <p className="text-sm text-gray-600">
@@ -327,7 +327,7 @@ export default function CheckoutPage() {
                 "Processing..."
               ) : (
                 <>
-                  <Lock size={16} weight="duotone" />
+                  <Heart size={16} fill="currentColor" />
                   Place Order • {total.toLocaleString()} MMK
                 </>
               )}

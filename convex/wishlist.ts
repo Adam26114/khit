@@ -13,17 +13,17 @@ export const getByUser = query({
 
     return await Promise.all(
       items.map(async (item) => {
-        const variant = await ctx.db.get(item.variantId);
-        const product = variant ? await ctx.db.get(variant.productId) : null;
-        const color = variant ? await ctx.db.get(variant.colorId) : null;
-        const size = variant ? await ctx.db.get(variant.sizeId) : null;
+        const product = await ctx.db.get(item.productId);
+        
+        const colorVariants = product?.colorVariants ?? [];
+        const colorVariant = item.colorVariantId 
+          ? colorVariants.find(cv => cv.id === item.colorVariantId)
+          : null;
 
         return {
           ...item,
-          variant,
           product,
-          color,
-          size,
+          colorVariant,
         };
       })
     );
@@ -33,13 +33,15 @@ export const getByUser = query({
 export const add = mutation({
   args: {
     userId: v.id("users"),
-    variantId: v.id("productVariants"),
+    productId: v.id("products"),
+    colorVariantId: v.optional(v.string()),
+    size: v.optional(v.string()),
   },
-  handler: async (ctx, { userId, variantId }) => {
+  handler: async (ctx, { userId, productId, colorVariantId, size }) => {
     const existing = await ctx.db
       .query("wishlistItems")
-      .withIndex("by_user_variant", (q) =>
-        q.eq("userId", userId).eq("variantId", variantId)
+      .withIndex("by_user_product", (q) =>
+        q.eq("userId", userId).eq("productId", productId)
       )
       .unique();
 
@@ -49,7 +51,9 @@ export const add = mutation({
 
     return await ctx.db.insert("wishlistItems", {
       userId,
-      variantId,
+      productId,
+      colorVariantId,
+      size,
       addedAt: Date.now(),
     });
   },
@@ -58,13 +62,13 @@ export const add = mutation({
 export const remove = mutation({
   args: {
     userId: v.id("users"),
-    variantId: v.id("productVariants"),
+    productId: v.id("products"),
   },
-  handler: async (ctx, { userId, variantId }) => {
+  handler: async (ctx, { userId, productId }) => {
     const existing = await ctx.db
       .query("wishlistItems")
-      .withIndex("by_user_variant", (q) =>
-        q.eq("userId", userId).eq("variantId", variantId)
+      .withIndex("by_user_product", (q) =>
+        q.eq("userId", userId).eq("productId", productId)
       )
       .unique();
 

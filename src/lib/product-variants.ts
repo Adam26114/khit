@@ -1,4 +1,45 @@
-import { resolveImageSrc } from "@/lib/image";
+/**
+ * Product variant utility functions for the storefront.
+ *
+ * Variants follow the MANGO model: one variant per color, each containing
+ * a sizeAvailability array with stock per size.
+ */
+
+/* ------------------------------------------------------------------ */
+/*  Type definitions                                                  */
+/* ------------------------------------------------------------------ */
+
+export interface ProductVariantMediaLike {
+  _id?: string;
+  mediaType: "image" | "video";
+  filePath?: string;
+  fileUrl?: string;
+  thumbnailUrl?: string;
+  altText?: string;
+  displayOrder: number;
+  isPrimary: boolean;
+}
+
+export interface SizeAvailabilityLike {
+  sizeId: string;
+  sizeName: string;
+  sizeNameMm?: string;
+  sizeCategory?: string;
+  stock: number;
+}
+
+export interface ProductVariantLike {
+  _id: string;
+  color: { id: string; name: string; hex: string; nameMm?: string };
+  sizeAvailability: SizeAvailabilityLike[];
+  totalStock: number;
+  displayOrder: number;
+  isPrimary: boolean;
+  price?: number;
+  media?: ProductVariantMediaLike[];
+  imageUrl?: string;
+  hasOwnMedia?: boolean;
+}
 
 export interface ProductColorLike {
   name: string;
@@ -6,258 +47,199 @@ export interface ProductColorLike {
   stock: number;
 }
 
-export interface ProductVariantMediaLike {
-  mediaType: "image" | "video";
-  filePath: string;
-  fileUrl?: string;
-  displayOrder?: number;
-  isPrimary?: boolean;
-}
-
-export interface ProductVariantLike {
+export interface NormalizedVariant {
   _id: string;
-  color: {
-    id: string;
-    name: string;
-    hex: string;
-  };
-  size: {
-    id: string;
-    name: string;
-  };
-  stock: number;
+  color: { id: string; name: string; hex: string; nameMm?: string };
+  sizeAvailability: SizeAvailabilityLike[];
+  totalStock: number;
   displayOrder: number;
   isPrimary: boolean;
   price?: number;
-  media?: ProductVariantMediaLike[];
-  imageUrl?: string;
+  media: ProductVariantMediaLike[];
+  imageUrl: string;
 }
 
-export interface ProductColorOption {
+/* ------------------------------------------------------------------ */
+/*  Normalize raw variant data                                        */
+/* ------------------------------------------------------------------ */
+
+export function normalizeProductVariants(
+  rawVariants?: ProductVariantLike[]
+): NormalizedVariant[] {
+  if (!rawVariants?.length) return [];
+
+  return rawVariants.map((variant) => ({
+    _id: variant._id,
+    color: variant.color,
+    sizeAvailability: variant.sizeAvailability ?? [],
+    totalStock: variant.totalStock ?? 0,
+    displayOrder: variant.displayOrder,
+    isPrimary: variant.isPrimary,
+    price: variant.price,
+    media: (variant.media ?? []).sort(
+      (a, b) => a.displayOrder - b.displayOrder
+    ),
+    imageUrl: variant.imageUrl ?? "",
+  }));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Build color option list                                           */
+/* ------------------------------------------------------------------ */
+
+export interface ColorOption {
   id: string;
   name: string;
   hex: string;
   stock: number;
-  order: number;
-}
-
-const DEFAULT_COLOR_HEX = "#111111";
-
-function isRenderableImagePath(src: string): boolean {
-  if (
-    src.startsWith("/") ||
-    src.startsWith("http://") ||
-    src.startsWith("https://") ||
-    src.startsWith("api/storage/") ||
-    src.startsWith("data:") ||
-    src.startsWith("blob:")
-  ) {
-    return true;
-  }
-
-  return /^[a-z0-9]{20,}$/.test(src);
-}
-
-function uniqueImages(images: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  for (const image of images) {
-    if (!image || seen.has(image)) continue;
-    seen.add(image);
-    result.push(image);
-  }
-
-  return result;
-}
-
-function toResolvedImage(src?: string | null): string {
-  if (!src) return "";
-  if (!isRenderableImagePath(src)) return "";
-  return resolveImageSrc(src);
-}
-
-function getVariantImages(variant: ProductVariantLike | null): string[] {
-  if (!variant) return [];
-
-  const fromMedia = (variant.media ?? [])
-    .filter((media) => media.mediaType === "image")
-    .slice()
-    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
-    .map((media) => toResolvedImage(media.fileUrl) || toResolvedImage(media.filePath))
-    .filter(Boolean);
-
-  if (fromMedia.length > 0) {
-    return uniqueImages(fromMedia);
-  }
-
-  const fallback = toResolvedImage(variant.imageUrl);
-  return fallback ? [fallback] : [];
-}
-
-export function normalizeProductVariants(
-  variants?: ProductVariantLike[] | null
-): ProductVariantLike[] {
-  return (variants ?? [])
-    .filter(Boolean)
-    .slice()
-    .sort((a, b) => a.displayOrder - b.displayOrder);
 }
 
 export function buildColorOptions(
-  variants?: ProductVariantLike[] | null,
-  legacyColors: ProductColorLike[] = []
-): ProductColorOption[] {
-  const normalizedVariants = normalizeProductVariants(variants);
-
-  if (normalizedVariants.length === 0) {
-    return legacyColors.map((color, index) => ({
-      id: `legacy:${color.name.toLowerCase()}`,
+  variants: NormalizedVariant[],
+  fallbackColors?: ProductColorLike[]
+): ColorOption[] {
+  if (variants.length === 0 && fallbackColors?.length) {
+    return fallbackColors.map((color, index) => ({
+      id: `legacy-${index}`,
       name: color.name,
-      hex: color.hex || DEFAULT_COLOR_HEX,
-      stock: Math.max(0, Number(color.stock) || 0),
-      order: index,
+      hex: color.hex || "#111111",
+      stock: color.stock ?? 0,
     }));
   }
 
-  const colorMap = new Map<string, ProductColorOption>();
-
-  for (const variant of normalizedVariants) {
-    const colorId = String(variant.color.id);
-    const existing = colorMap.get(colorId);
-
-    if (!existing) {
-      colorMap.set(colorId, {
-        id: colorId,
-        name: variant.color.name,
-        hex: variant.color.hex || DEFAULT_COLOR_HEX,
-        stock: Math.max(0, Number(variant.stock) || 0),
-        order: variant.displayOrder,
-      });
-      continue;
-    }
-
-    existing.stock += Math.max(0, Number(variant.stock) || 0);
-    existing.order = Math.min(existing.order, variant.displayOrder);
-  }
-
-  return Array.from(colorMap.values()).sort((a, b) => a.order - b.order);
+  // One variant = one color.
+  return variants.map((variant) => ({
+    id: variant.color.id,
+    name: variant.color.name,
+    hex: variant.color.hex,
+    stock: variant.totalStock,
+  }));
 }
+
+/* ------------------------------------------------------------------ */
+/*  Build size options for a selected color                           */
+/* ------------------------------------------------------------------ */
 
 export function buildSizeOptionsForColor(
-  variants: ProductVariantLike[] | null | undefined,
+  variants: NormalizedVariant[],
   selectedColorId: string,
-  legacySizes: string[] = []
+  fallbackSizes?: string[]
 ): string[] {
-  const normalizedVariants = normalizeProductVariants(variants);
-
-  if (normalizedVariants.length === 0) {
-    return legacySizes;
+  if (variants.length === 0) {
+    return fallbackSizes ?? [];
   }
 
-  const filteredVariants = selectedColorId
-    ? normalizedVariants.filter((variant) => String(variant.color.id) === selectedColorId)
-    : normalizedVariants;
-
-  const seen = new Set<string>();
-  const sizes: string[] = [];
-  for (const variant of filteredVariants) {
-    const sizeName = variant.size.name;
-    if (seen.has(sizeName)) continue;
-    seen.add(sizeName);
-    sizes.push(sizeName);
-  }
-
-  return sizes;
-}
-
-export function getSelectedVariant(
-  variants: ProductVariantLike[] | null | undefined,
-  selectedColorId: string,
-  selectedSize: string
-): ProductVariantLike | null {
-  const normalizedVariants = normalizeProductVariants(variants);
-  if (normalizedVariants.length === 0) return null;
-
-  const primaryVariant =
-    normalizedVariants.find((variant) => variant.isPrimary) ?? normalizedVariants[0];
-
-  const variantsForColor = selectedColorId
-    ? normalizedVariants.filter((variant) => String(variant.color.id) === selectedColorId)
-    : normalizedVariants;
-
-  if (variantsForColor.length === 0) {
-    return primaryVariant;
-  }
-
-  if (selectedSize) {
-    const exact = variantsForColor.find((variant) => variant.size.name === selectedSize);
-    if (exact) return exact;
-  }
-
-  return variantsForColor.find((variant) => variant.isPrimary) ?? variantsForColor[0];
-}
-
-export function getDisplayImagesForSelection(params: {
-  variants?: ProductVariantLike[] | null;
-  selectedColorId: string;
-  selectedSize: string;
-  productImages?: string[] | null;
-}): string[] {
-  const normalizedVariants = normalizeProductVariants(params.variants);
-  const fallbackProductImages = uniqueImages(
-    (params.productImages ?? [])
-      .map((image) => toResolvedImage(image))
-      .filter(Boolean)
-  );
-
-  if (normalizedVariants.length === 0) {
-    return fallbackProductImages;
-  }
-
-  const selectedVariant = getSelectedVariant(
-    normalizedVariants,
-    params.selectedColorId,
-    params.selectedSize
-  );
-
-  const images: string[] = [];
-
-  const addVariantImages = (variant: ProductVariantLike | null) => {
-    for (const image of getVariantImages(variant)) {
-      if (!images.includes(image)) {
-        images.push(image);
+  const variant = variants.find((v) => v.color.id === selectedColorId);
+  if (!variant) {
+    // If color not found, union all sizes from all variants.
+    const allSizes = new Map<string, string>();
+    for (const v of variants) {
+      for (const sa of v.sizeAvailability) {
+        if (!allSizes.has(sa.sizeId)) {
+          allSizes.set(sa.sizeId, sa.sizeName);
+        }
       }
     }
-  };
+    return Array.from(allSizes.values());
+  }
+
+  return variant.sizeAvailability.map((sa) => sa.sizeName);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Get the variant for a selected color                              */
+/* ------------------------------------------------------------------ */
+
+export function getSelectedVariant(
+  variants: NormalizedVariant[],
+  selectedColorId: string,
+  _selectedSize?: string
+): NormalizedVariant | undefined {
+  if (!variants.length) return undefined;
+  return variants.find((v) => v.color.id === selectedColorId);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Get stock for a specific size within a variant                    */
+/* ------------------------------------------------------------------ */
+
+export function getSizeStock(
+  variant: NormalizedVariant | undefined,
+  sizeName: string
+): number {
+  if (!variant) return 0;
+  const sa = variant.sizeAvailability.find(
+    (s) => s.sizeName.toLowerCase() === sizeName.toLowerCase()
+  );
+  return sa?.stock ?? 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Check if a specific size is in stock for a variant                */
+/* ------------------------------------------------------------------ */
+
+export function isSizeInStock(
+  variant: NormalizedVariant | undefined,
+  sizeName: string
+): boolean {
+  return getSizeStock(variant, sizeName) > 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Get display images for current selection                          */
+/* ------------------------------------------------------------------ */
+
+export function getDisplayImagesForSelection(params: {
+  variants: NormalizedVariant[];
+  selectedColorId: string;
+  selectedSize?: string;
+  productImages?: string[];
+}): string[] {
+  const { variants, selectedColorId, productImages = [] } = params;
+
+  // Find the variant for the selected color.
+  const selectedVariant = variants.find(
+    (v) => v.color.id === selectedColorId
+  );
 
   if (selectedVariant) {
-    addVariantImages(selectedVariant);
+    const variantImages = selectedVariant.media
+      .filter((m) => m.mediaType === "image" && m.fileUrl)
+      .map((m) => {
+        const url = m.fileUrl!;
+        // If it looks like a raw Convex storage ID (no slashes, typical length)
+        if (url && !url.includes("/") && url.length > 10) {
+          return `/api/storage/${url}`;
+        }
+        return url;
+      })
+      .filter(Boolean);
 
-    const sameColorVariants = normalizedVariants.filter(
-      (variant) =>
-        String(variant.color.id) === String(selectedVariant.color.id) &&
-        variant._id !== selectedVariant._id
-    );
-    for (const variant of sameColorVariants) {
-      addVariantImages(variant);
+    if (variantImages.length > 0) return variantImages;
+  }
+
+  // Fallback: try primary variant images.
+  const primaryVariant = variants.find((v) => v.isPrimary) || variants[0];
+  if (primaryVariant) {
+    const primaryImages = primaryVariant.media
+      .filter((m) => m.mediaType === "image" && m.fileUrl)
+      .map((m) => {
+        const url = m.fileUrl!;
+        if (url && !url.includes("/") && url.length > 10) {
+          return `/api/storage/${url}`;
+        }
+        return url;
+      })
+      .filter(Boolean);
+
+    if (primaryImages.length > 0) return primaryImages;
+  }
+
+  // Final fallback: product-level images.
+  return productImages.filter(Boolean).map(url => {
+    if (url && !url.includes("/") && url.length > 10) {
+      return `/api/storage/${url}`;
     }
-  }
-
-  if (images.length === 0) {
-    const primaryVariant =
-      normalizedVariants.find((variant) => variant.isPrimary) ?? normalizedVariants[0];
-    addVariantImages(primaryVariant);
-    for (const variant of normalizedVariants) {
-      if (variant._id === primaryVariant._id) continue;
-      addVariantImages(variant);
-      if (images.length > 0) break;
-    }
-  }
-
-  if (images.length === 0) {
-    images.push(...fallbackProductImages);
-  }
-
-  return uniqueImages(images);
+    return url;
+  });
 }

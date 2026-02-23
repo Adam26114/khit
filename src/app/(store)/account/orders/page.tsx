@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useSession } from "@/lib/auth";
 import { useQuery, api } from "@/lib/convex";
 import type { GenericId } from "convex/values";
-import { ArrowRight, Package } from "@/components/solar-icons";
+import { ArrowRight, Package } from "lucide-react";
 
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
