@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle, ArrowRight, Package, Clock, Storefront, Truck } from "@/components/solar-icons";
+import {
+  CheckCircle,
+  ArrowRight,
+  Package,
+  Clock,
+  Store,
+  Truck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, api } from "@/lib/convex";
 
@@ -54,7 +61,7 @@ export default function OrderConfirmationPage({ params }: PageProps) {
         {/* Success Icon */}
         <div className="mb-8 text-center">
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
-            <CheckCircle size={40} weight="duotone" />
+            <CheckCircle size={48} className="text-green-600 mb-4" />
           </div>
           <h1 className="text-3xl font-medium mb-2">Order Confirmed!</h1>
           <p className="text-gray-600">
@@ -123,7 +130,7 @@ export default function OrderConfirmationPage({ params }: PageProps) {
           <div className="flex items-center gap-3">
             {order.deliveryMethod === "pickup" ? (
               <>
-                <Storefront size={20} weight="duotone" />
+                <Store size={16} />
                 <div>
                   <p className="font-medium">Store Pickup</p>
                   <p className="text-sm text-gray-600">FREE • Ready within 24 hours</p>
@@ -131,7 +138,7 @@ export default function OrderConfirmationPage({ params }: PageProps) {
               </>
             ) : (
               <>
-                <Truck size={20} weight="duotone" />
+                <Truck size={16} />
                 <div>
                   <p className="font-medium">Delivery to Your Address</p>
                   <p className="text-sm text-gray-600">{order.shippingFee.toLocaleString()} MMK • 1-3 business days</p>
@@ -147,7 +154,7 @@ export default function OrderConfirmationPage({ params }: PageProps) {
           <div className="space-y-4">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <Clock size={20} weight="duotone" />
+                <Clock size={16} />
               </div>
               <div>
                 <h3 className="font-medium">Order Processing</h3>
@@ -160,7 +167,7 @@ export default function OrderConfirmationPage({ params }: PageProps) {
 
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <Package size={20} weight="duotone" />
+                <Package size={16} />
               </div>
               <div>
                 <h3 className="font-medium">{order.deliveryMethod === "pickup" ? "Ready for Pickup" : "Delivery"}</h3>

@@ -11,14 +11,10 @@
 import type * as auth from "../auth.js";
 import type * as cart from "../cart.js";
 import type * as categories from "../categories.js";
-import type * as colors from "../colors.js";
 import type * as http from "../http.js";
-import type * as media from "../media.js";
 import type * as orders from "../orders.js";
 import type * as products from "../products.js";
-import type * as sizes from "../sizes.js";
 import type * as users from "../users.js";
-import type * as variants from "../variants.js";
 import type * as wishlist from "../wishlist.js";
 
 import type {
@@ -31,14 +27,10 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   cart: typeof cart;
   categories: typeof categories;
-  colors: typeof colors;
   http: typeof http;
-  media: typeof media;
   orders: typeof orders;
   products: typeof products;
-  sizes: typeof sizes;
   users: typeof users;
-  variants: typeof variants;
   wishlist: typeof wishlist;
 }>;
 

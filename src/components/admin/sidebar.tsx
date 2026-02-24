@@ -3,14 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import {
-  Boxes,
   Command,
   FolderTree,
-  ImageIcon,
   LifeBuoy,
   Package,
-  Palette,
-  Ruler,
   Send,
   Settings,
   ShoppingCart,
@@ -63,17 +59,6 @@ const data = {
       icon: Package,
       items: [
         { title: "Categories", url: "/admin/categories", icon: FolderTree },
-        { title: "Variants", url: "/admin/variants", icon: Boxes },
-        { title: "Media", url: "/admin/media", icon: ImageIcon },
-      ],
-    },
-    {
-      name: "Catalog Tools",
-      url: "/admin/colors",
-      icon: FolderTree,
-      items: [
-        { title: "Colors", url: "/admin/colors", icon: Palette },
-        { title: "Sizes", url: "/admin/sizes", icon: Ruler },
       ],
     },
   ],
@@ -90,10 +75,6 @@ export function getAdminPageTitle(pathname: string): string {
     "/admin/orders": "Orders",
     "/admin/products": "Products",
     "/admin/categories": "Categories",
-    "/admin/colors": "Colors",
-    "/admin/sizes": "Sizes",
-    "/admin/variants": "Variants",
-    "/admin/media": "Media",
     "/admin/inventory": "Inventory",
     "/admin/users": "Users",
     "/admin/settings": "Settings",

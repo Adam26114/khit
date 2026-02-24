@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient, useSession } from "@/lib/auth";
 import { api, useMutation, useQuery } from "@/lib/convex";
-import { Package, User, SignOut, CaretRight } from "@/components/solar-icons";
+import { Package, User, LogOut, ChevronRight, SlidersHorizontal, ArrowRight } from "lucide-react";
 
 export default function AccountPage() {
   const router = useRouter();
@@ -160,7 +160,7 @@ export default function AccountPage() {
               <Package size={20} />
               <span>My Orders</span>
             </div>
-            <CaretRight size={16} />
+            <ChevronRight size={16} />
           </Link>
         </div>
 
@@ -171,7 +171,7 @@ export default function AccountPage() {
           onClick={handleLogout}
         >
           <div className="mr-2">
-            <SignOut size={16} />
+            <LogOut size={20} />
           </div>
           Sign Out
         </Button>

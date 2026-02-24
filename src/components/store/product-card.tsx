@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { type MouseEvent, useEffect, useMemo, useState } from "react";
-import { CaretRight, Heart } from "@/components/solar-icons";
+import { ChevronLeft, ChevronRight, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   buildColorOptions,
   buildSizeOptionsForColor,
   getDisplayImagesForSelection,
   getSelectedVariant,
+  getSizeStock,
   normalizeProductVariants,
   type ProductColorLike,
   type ProductVariantLike,
@@ -79,8 +80,8 @@ export function ProductCard({ product }: ProductCardProps) {
   }, [sizeOptions, selectedSize]);
 
   const selectedVariant = useMemo(
-    () => getSelectedVariant(variants, selectedColorId, selectedSize),
-    [variants, selectedColorId, selectedSize]
+    () => getSelectedVariant(variants, selectedColorId),
+    [variants, selectedColorId]
   );
 
   const resolvedImages = useMemo(
@@ -106,7 +107,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const categoryLabel = (product.categoryName || "ESSENTIALS").toUpperCase();
 
   const effectivePrice =
-    selectedVariant?.price ?? product.salePrice ?? product.price;
+    (selectedVariant?.price ?? product.salePrice) || product.price;
   const hasDiscount = effectivePrice < product.price;
   const discountPercentage = hasDiscount
     ? Math.round(
@@ -116,9 +117,8 @@ export function ProductCard({ product }: ProductCardProps) {
 
   const visibleSizes = sizeOptions.slice(0, 6);
   const visibleColors = colorOptions.slice(0, 5);
-  const selectedStock = selectedVariant?.stock ?? selectedColor?.stock ?? 0;
   const isCurrentSelectionOutOfStock =
-    variants.length > 0 ? selectedStock <= 0 : product.isOutOfStock;
+    variants.length > 0 ? (selectedVariant?.totalStock ?? 0) <= 0 : product.isOutOfStock;
 
   const goToNextImage = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -150,7 +150,7 @@ export function ProductCard({ product }: ProductCardProps) {
     <div>
       {/* Image Container */}
       <div
-        className="group relative mb-4 aspect-[3/4] overflow-hidden bg-gray-100"
+        className="group relative mb-1.5 aspect-[3/4] overflow-hidden bg-gray-100"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -174,22 +174,22 @@ export function ProductCard({ product }: ProductCardProps) {
             <button
               type="button"
               onClick={goToPreviousImage}
-              className={`absolute left-2 top-1/2 z-20 -translate-y-1/2 h-8 w-8 items-center justify-center border border-black/20 bg-white/85 text-black transition ${
-                isHovered ? "flex opacity-100" : "pointer-events-none opacity-0"
+              className={`absolute left-2 top-1/2 z-20 -translate-y-1/2 h-8 w-8 flex items-center justify-center rounded-full bg-white shadow-md text-black transition-all hover:scale-110 p-0 ${
+                isHovered ? "opacity-100" : "opacity-0 pointer-events-none"
               }`}
               aria-label="Previous image"
             >
-              <CaretRight size={16} className="rotate-180" />
+              <ChevronLeft className="size-4" strokeWidth={2.5} />
             </button>
             <button
               type="button"
               onClick={goToNextImage}
-              className={`absolute right-2 top-1/2 z-20 -translate-y-1/2 h-8 w-8 items-center justify-center border border-black/20 bg-white/85 text-black transition ${
-                isHovered ? "flex opacity-100" : "pointer-events-none opacity-0"
+              className={`absolute right-2 top-1/2 z-20 -translate-y-1/2 h-8 w-8 flex items-center justify-center rounded-full bg-white shadow-md text-black transition-all hover:scale-110 p-0 ${
+                isHovered ? "opacity-100" : "opacity-0 pointer-events-none"
               }`}
               aria-label="Next image"
             >
-              <CaretRight size={16} />
+              <ChevronRight className="size-4" strokeWidth={2.5} />
             </button>
           </>
         )}
@@ -197,15 +197,14 @@ export function ProductCard({ product }: ProductCardProps) {
         {/* Hover Size Selector */}
         {!isCurrentSelectionOutOfStock && visibleSizes.length > 0 && (
           <div
-            className={`absolute bottom-0 left-0 right-0 z-20 bg-gray-100/85 px-3 py-3 backdrop-blur-[1px] transition ${
+            className={`absolute bottom-0 left-0 right-0 z-20 bg-white/95 px-2 py-3 transition-opacity duration-300 ${
               isHovered ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
           >
-            <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
               {visibleSizes.map((size) => {
-                const variantForSize = getSelectedVariant(variants, selectedColorId, size);
-                const isSizeOutOfStock =
-                  variants.length > 0 ? (variantForSize?.stock ?? 0) <= 0 : false;
+                const sizeStock = getSizeStock(selectedVariant, size);
+                const isSizeOutOfStock = variants.length > 0 ? sizeStock <= 0 : false;
 
                 return (
                   <button
@@ -216,13 +215,12 @@ export function ProductCard({ product }: ProductCardProps) {
                       e.preventDefault();
                       e.stopPropagation();
                       setSelectedSize(size);
-                      setCurrentImageIndex(0);
                     }}
-                    className={`min-w-10 border border-transparent px-3 py-2 text-[13px] font-medium leading-none text-gray-700 transition-colors ${
-                      selectedSize === size
-                        ? "bg-[#e5e5e5] text-gray-900"
-                        : "bg-transparent hover:bg-gray-200/80"
-                    } ${isSizeOutOfStock ? "cursor-not-allowed opacity-40" : ""}`}
+                    className={`text-[12px] font-medium px-2 py-1 transition-colors ${
+                      isSizeOutOfStock
+                        ? "text-gray-300 cursor-not-allowed"
+                        : "text-black hover:bg-gray-100"
+                    } ${selectedSize === size ? "bg-gray-100" : ""}`}
                   >
                     {size}
                   </button>
@@ -249,16 +247,21 @@ export function ProductCard({ product }: ProductCardProps) {
         )}
       </div>
 
-      {/* Product Info */}
-      <div className="space-y-2.5">
-        <div className="flex items-start justify-between gap-3">
-          <p className="pt-0.5 text-[10px] uppercase tracking-wide text-gray-600">
-            {categoryLabel}
-          </p>
+      <div className="space-y-1 pt-2">
+        <p className="text-[10px] text-gray-400 font-normal">
+          {categoryLabel}
+        </p>
+
+        <div className="flex items-center justify-between gap-4">
+          <Link href={`/products/${product.slug}`} className="flex-1">
+            <h3 className="text-[13px] font-normal text-black line-clamp-2 leading-snug">
+              {product.name}
+            </h3>
+          </Link>
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 shrink-0 rounded-none p-0 text-gray-700 hover:bg-transparent hover:text-black"
+            className="h-5 w-5 rounded-none p-0 text-gray-400 hover:bg-transparent hover:text-black"
             aria-label="Add to wishlist"
             onClick={(e) => {
               e.preventDefault();
@@ -267,39 +270,33 @@ export function ProductCard({ product }: ProductCardProps) {
             }}
           >
             <Heart
-              weight={isWishlisted ? "fill" : "duotone"}
-              className={`h-5 w-5 transition-all ${
-                isWishlisted ? "text-gray-900" : "text-gray-700"
+              fill={isWishlisted ? "black" : "none"}
+              className={`size-5 transition-all ${
+                isWishlisted ? "text-black" : "text-gray-400"
               }`}
             />
           </Button>
         </div>
 
-        <Link href={`/products/${product.slug}`}>
-          <h3 className="line-clamp-2 text-[14px] font-medium leading-6 text-gray-900 transition-colors hover:text-gray-600">
-            {product.name}
-          </h3>
-        </Link>
-
         <div className="flex items-center gap-2">
           {hasDiscount ? (
             <>
-              <span className="text-[14px] text-gray-400 line-through">
-                {product.price.toLocaleString()} MMK
-              </span>
-              <span className="text-[14px] font-semibold text-red-600">
+              <span className="text-[13px] font-medium text-red-600">
                 {effectivePrice.toLocaleString()} MMK
+              </span>
+              <span className="text-[11px] text-gray-400 line-through">
+                {product.price.toLocaleString()} MMK
               </span>
             </>
           ) : (
-            <span className="text-[14px] font-medium text-gray-900">
+            <span className="text-[13px] font-normal text-black">
               {product.price.toLocaleString()} MMK
             </span>
           )}
         </div>
 
-        {/* Colors */}
-        <div className="flex items-end gap-2">
+        {/* Color Swatches — MANGO-style: small squares */}
+        <div className="flex items-center gap-1.5 pt-1">
           {visibleColors.map((color) => {
             const isSelected = selectedColorId === color.id;
             return (
@@ -307,22 +304,27 @@ export function ProductCard({ product }: ProductCardProps) {
                 key={color.id}
                 type="button"
                 onClick={(e) => handleColorClick(e, color.id)}
-                className="flex flex-col items-center gap-1"
+                className="group flex flex-col items-center relative pb-1"
                 title={color.name}
               >
                 <span
-                  className="h-6 w-6 rounded-full border border-black/10"
-                  style={{ backgroundColor: color.hex }}
+                  className={`h-3.5 w-3.5 ${
+                    isSelected
+                      ? "border border-black"
+                      : "border border-[#E5E5E5]"
+                  }`}
+                  style={{
+                    backgroundColor: color.hex,
+                  }}
                 />
-                <span
-                  className="h-0.5 w-5 transition-colors"
-                  style={{ backgroundColor: isSelected ? color.hex : "transparent" }}
-                />
+                {isSelected && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-black" />
+                )}
               </button>
             );
           })}
           {colorOptions.length > visibleColors.length && (
-            <span className="pb-1 text-xs text-gray-600">
+            <span className="text-[10px] text-gray-500">
               +{colorOptions.length - visibleColors.length}
             </span>
           )}

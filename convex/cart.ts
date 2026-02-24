@@ -13,17 +13,18 @@ export const getByUser = query({
 
     return await Promise.all(
       items.map(async (item) => {
-        const variant = await ctx.db.get(item.variantId);
-        const product = variant ? await ctx.db.get(variant.productId) : null;
-        const color = variant ? await ctx.db.get(variant.colorId) : null;
-        const size = variant ? await ctx.db.get(variant.sizeId) : null;
+        const product = await ctx.db.get(item.productId);
+        
+        const colorVariants = product?.colorVariants ?? [];
+        const colorVariant = colorVariants.find(cv => cv.id === item.colorVariantId);
+        
+        const sizeStock = colorVariant?.stock?.[item.size] ?? 0;
 
         return {
           ...item,
-          variant,
           product,
-          color,
-          size,
+          colorVariant,
+          sizeStock,
         };
       })
     );
@@ -33,14 +34,16 @@ export const getByUser = query({
 export const upsertItem = mutation({
   args: {
     userId: v.id("users"),
-    variantId: v.id("productVariants"),
+    productId: v.id("products"),
+    colorVariantId: v.string(),
+    size: v.string(),
     quantity: v.number(),
   },
-  handler: async (ctx, { userId, variantId, quantity }) => {
+  handler: async (ctx, { userId, productId, colorVariantId, size, quantity }) => {
     const existing = await ctx.db
       .query("cartItems")
-      .withIndex("by_user_variant", (q) =>
-        q.eq("userId", userId).eq("variantId", variantId)
+      .withIndex("by_user_product_size", (q) =>
+        q.eq("userId", userId).eq("productId", productId).eq("colorVariantId", colorVariantId).eq("size", size)
       )
       .unique();
 
@@ -63,7 +66,9 @@ export const upsertItem = mutation({
 
     return await ctx.db.insert("cartItems", {
       userId,
-      variantId,
+      productId,
+      colorVariantId,
+      size,
       quantity: safeQuantity,
       addedAt: Date.now(),
       updatedAt: Date.now(),
@@ -74,13 +79,15 @@ export const upsertItem = mutation({
 export const removeItem = mutation({
   args: {
     userId: v.id("users"),
-    variantId: v.id("productVariants"),
+    productId: v.id("products"),
+    colorVariantId: v.string(),
+    size: v.string(),
   },
-  handler: async (ctx, { userId, variantId }) => {
+  handler: async (ctx, { userId, productId, colorVariantId, size }) => {
     const existing = await ctx.db
       .query("cartItems")
-      .withIndex("by_user_variant", (q) =>
-        q.eq("userId", userId).eq("variantId", variantId)
+      .withIndex("by_user_product_size", (q) =>
+        q.eq("userId", userId).eq("productId", productId).eq("colorVariantId", colorVariantId).eq("size", size)
       )
       .unique();
 

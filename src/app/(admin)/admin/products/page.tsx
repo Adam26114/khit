@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { z } from "zod";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { RichTextEditor } from "@/components/admin/rich-text-editor";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -23,17 +24,11 @@ import {
 } from "@/components/ui/select";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Eye, EyeOff, Pencil, Plus, Package, Trash2 } from "lucide-react";
-import { resolveImageSrc } from "@/lib/image";
-import { AdminMediaUploader } from "@/components/admin/media-uploader";
 import { AdminDataTable, type AdminTableColumn } from "@/components/admin/data-table";
 import { notify } from "@/lib/notifications";
 import { type FormErrors, zodToFormErrors } from "@/lib/zod-errors";
-
-interface ColorVariant {
-  name: string;
-  hex: string;
-  stock: number;
-}
+import { createEmptyColorVariant, type ColorVariant } from "@/lib/product-types";
+import { VariantCard } from "@/components/admin/variant-card";
 
 interface Product {
   _id: string;
@@ -44,7 +39,7 @@ interface Product {
   salePrice?: number;
   stock: number;
   sizes: string[];
-  colors: ColorVariant[];
+  colors: { name: string; hex: string; stock: number }[];
   images: string[];
   imageRefs?: string[];
   isFeatured: boolean;
@@ -52,218 +47,215 @@ interface Product {
   isActive: boolean;
   isOutOfStock: boolean;
   categoryId: string;
+  colorVariants: ColorVariant[];
 }
 
-interface SizeOption {
-  _id: string;
-  name: string;
-  sizeCategory: string;
-  displayOrder: number;
-}
-
-const optionalNonNegativeNumber = z.preprocess(
-  (value) => {
-    if (value === "" || value === null || value === undefined) return undefined;
-    const parsed = Number(value);
-    return Number.isNaN(parsed) ? value : parsed;
-  },
-  z.number().min(0, "Sale price must be 0 or greater").optional()
-);
-
-const productSchema = z
-  .object({
-    name: z
-      .string()
-      .trim()
-      .min(1, "Product name is required")
-      .max(150, "Product name is too long"),
-    slug: z
-      .string()
-      .trim()
-      .min(1, "Slug is required")
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens only"),
-    description: z
-      .string()
-      .trim()
-      .min(1, "Description is required")
-      .max(1000, "Description is too long"),
-    price: z.coerce.number().min(1, "Price must be greater than 0"),
-    salePrice: optionalNonNegativeNumber,
-    categoryId: z.string().min(1, "Category is required"),
-    sizes: z.array(z.string()).min(1, "Select at least one size"),
-    stock: z.coerce
-      .number()
-      .int("Stock must be a whole number")
-      .min(0, "Stock must be 0 or greater"),
-    images: z.array(z.string()).min(1, "Upload at least one product image"),
-    colors: z
-      .array(
-        z.object({
-          name: z.string(),
-          hex: z.string(),
-          stock: z.number(),
-        })
-      )
-      .optional(),
-    isFeatured: z.boolean(),
-    isPublished: z.boolean(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.salePrice !== undefined && data.salePrice > data.price) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["salePrice"],
-        message: "Sale price must be less than or equal to price",
-      });
-    }
-  });
+const productSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Product name is required")
+    .max(150, "Product name is too long"),
+  slug: z
+    .string()
+    .trim()
+    .min(1, "Slug is required")
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens only"),
+  description: z
+    .string()
+    .trim()
+    .min(1, "Description is required")
+    .max(1000, "Description is too long"),
+  price: z.coerce.number().min(1, "Price must be greater than 0"),
+  salePrice: z.coerce.number().min(1, "Discount price must be greater than 0").optional().or(z.literal("")),
+  categoryId: z.string().min(1, "Category is required"),
+  colorVariants: z.array(z.object({
+    id: z.string(),
+    colorName: z.string(),
+    colorHex: z.string(),
+    images: z.array(z.string()),
+    selectedSizes: z.array(z.string()),
+    stock: z.record(z.string(), z.number()),
+    measurements: z.record(z.string(), z.object({
+      shoulder: z.number().optional(),
+      chest: z.number().optional(),
+      sleeve: z.number().optional(),
+      waist: z.number().optional(),
+      length: z.number().optional(),
+    })),
+  })),
+  isFeatured: z.boolean(),
+  isPublished: z.boolean(),
+}).superRefine((data, ctx) => {
+  if (
+    data.salePrice !== undefined &&
+    data.salePrice !== "" &&
+    Number(data.salePrice) > data.price
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["salePrice"],
+      message: "Discount price must be less than or equal to price",
+      fatal: true,
+    });
+  }
+});
 
 export default function ProductsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
-  const [uploadedImagePreviews, setUploadedImagePreviews] = useState<Record<string, string>>({});
-  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [colorVariants, setColorVariants] = useState<ColorVariant[]>([]);
+  const [expandedVariantIndex, setExpandedVariantIndex] = useState<number | null>(0);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const products = useQuery(api.products.getAll, {});
   const categories = useQuery(api.categories.getActive);
-  const sizes = useQuery(api.sizes.getAll, {});
   const createProduct = useMutation(api.products.create);
   const updateProduct = useMutation(api.products.update);
   const removeProduct = useMutation(api.products.remove);
   const generateUploadUrl = useMutation(api.products.generateUploadUrl);
 
-  const availableSizes = useMemo(() => {
-    const uniqueByName = new Map<string, SizeOption>();
-    for (const size of (sizes as SizeOption[] | undefined) ?? []) {
-      const normalizedName = size.name.trim().toUpperCase();
-      if (!normalizedName || uniqueByName.has(normalizedName)) continue;
-      uniqueByName.set(normalizedName, {
-        ...size,
-        name: normalizedName,
-      });
-    }
-    return Array.from(uniqueByName.values());
-  }, [sizes]);
-
-  const groupedSizes = useMemo(() => {
-    const grouped = new Map<string, SizeOption[]>();
-    for (const size of availableSizes) {
-      const category = (size.sizeCategory || "apparel").trim().toLowerCase();
-      const items = grouped.get(category) ?? [];
-      items.push(size);
-      grouped.set(category, items);
-    }
-    return Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [availableSizes]);
-
-  useEffect(() => {
-    const allowed = new Set(availableSizes.map((size) => size.name));
-    setSelectedSizes((previous) => previous.filter((size) => allowed.has(size)));
-  }, [availableSizes]);
-
-  const clearBlobPreviews = (previewMap: Record<string, string>) => {
-    Object.values(previewMap).forEach((url) => {
-      if (url.startsWith("blob:")) URL.revokeObjectURL(url);
-    });
-  };
-
   const resetDialogState = () => {
-    clearBlobPreviews(uploadedImagePreviews);
     setIsAddDialogOpen(false);
     setEditingProduct(null);
-    setUploadedImages([]);
-    setUploadedImagePreviews({});
-    setSelectedSizes([]);
     setColorVariants([]);
+    setExpandedVariantIndex(0);
     setFormErrors({});
   };
 
   const openCreate = () => {
-    clearBlobPreviews(uploadedImagePreviews);
     setEditingProduct(null);
-    setUploadedImages([]);
-    setUploadedImagePreviews({});
-    setSelectedSizes([]);
-    setColorVariants([]);
+    setColorVariants([createEmptyColorVariant()]);
+    setExpandedVariantIndex(0);
     setFormErrors({});
     setIsAddDialogOpen(true);
   };
 
   const openEdit = (product: Product) => {
-    const availableSizeNameSet = new Set(availableSizes.map((size) => size.name));
-    const normalizedProductSizes = (product.sizes || [])
-      .map((size) => size.trim().toUpperCase())
-      .filter(Boolean);
-
     setEditingProduct(product);
-    setSelectedSizes(
-      normalizedProductSizes.filter((size) => availableSizeNameSet.has(size))
-    );
-    setColorVariants(product.colors || []);
+    
+    // Map existing colorVariants which have string[] images into ImageFile[] objects
+    const mappedVariants = product.colorVariants?.length 
+      ? product.colorVariants.map(cv => ({
+          ...cv,
+          images: (cv.images as unknown as string[]).map(imgId => ({
+            id: crypto.randomUUID(),
+            preview: `/api/storage/${imgId}`,
+            label: `Image ${imgId.slice(0, 6)}...`,
+            storageId: imgId,
+          }))
+        }))
+      : [createEmptyColorVariant()];
 
-    const imageRefs = product.imageRefs?.length ? product.imageRefs : product.images || [];
-    setUploadedImages(imageRefs);
-    setUploadedImagePreviews(
-      Object.fromEntries(
-        imageRefs.map((ref, index) => [
-          ref,
-          product.images?.[index] ? resolveImageSrc(product.images[index]) : resolveImageSrc(ref),
-        ])
-      )
-    );
-
+    setColorVariants(mappedVariants as any[]);
+    setExpandedVariantIndex(product.colorVariants?.length ? 0 : null);
     setFormErrors({});
     setIsAddDialogOpen(true);
   };
 
+  const handleAddVariant = () => {
+    setColorVariants([...colorVariants, createEmptyColorVariant()]);
+    setExpandedVariantIndex(colorVariants.length);
+  };
+
+  const handleRemoveVariant = (index: number) => {
+    setColorVariants(colorVariants.filter((_, i) => i !== index));
+    if (expandedVariantIndex !== null && index <= expandedVariantIndex) {
+      setExpandedVariantIndex(Math.max(0, expandedVariantIndex - 1));
+    }
+  };
+
+  const handleUpdateVariant = (index: number, updated: ColorVariant) => {
+    const newVariants = [...colorVariants];
+    newVariants[index] = updated;
+    setColorVariants(newVariants);
+  };
+
+  const handleCopyMeasurements = (sourceIndex: number, targetIndex: number) => {
+    const source = colorVariants[sourceIndex];
+    if (!source) return;
+    
+    const target = colorVariants[targetIndex];
+    const updated: ColorVariant = {
+      ...target,
+      measurements: { ...source.measurements },
+    };
+    handleUpdateVariant(targetIndex, updated);
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
 
-    const parsed = productSchema.safeParse({
-      name: String(formData.get("name") ?? ""),
-      slug: String(formData.get("slug") ?? ""),
-      description: String(formData.get("description") ?? ""),
-      price: formData.get("price") ?? "0",
-      salePrice: String(formData.get("salePrice") ?? "").trim(),
-      categoryId: String(formData.get("categoryId") ?? ""),
-      sizes: selectedSizes,
-      colors: colorVariants,
-      stock: formData.get("stock") ?? "0",
-      images: uploadedImages,
-      isFeatured: formData.get("isFeatured") === "on",
-      isPublished: formData.get("isPublished") === "on",
-    });
-
-    if (!parsed.success) {
-      setFormErrors(zodToFormErrors(parsed.error));
-      notify.validation();
-      return;
-    }
-
-    const data = parsed.data;
-    setFormErrors({});
-
     try {
+      // 1. Upload any new images first
+      const uploadedVariants = await Promise.all(
+        colorVariants.map(async (cv) => {
+          const uploadedImages = await Promise.all(
+            cv.images.map(async (img) => {
+              if (img.file && !img.storageId) {
+                const uploadUrl = await generateUploadUrl();
+                const response = await fetch(uploadUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": img.file.type },
+                  body: img.file,
+                });
+                if (!response.ok) throw new Error(`Failed to upload image ${img.label}`);
+                const { storageId } = await response.json();
+                return storageId;
+              }
+              // It's already an uploaded storageId (or a legacy URL)
+              return img.storageId || img.preview || img.id;
+            })
+          );
+          
+          return {
+            id: cv.id,
+            colorName: cv.colorName,
+            colorHex: cv.colorHex,
+            images: uploadedImages,
+            selectedSizes: cv.selectedSizes,
+            stock: cv.stock,
+            measurements: cv.measurements,
+          };
+        })
+      );
+
+      const parsed = productSchema.safeParse({
+        name: String(formData.get("name") ?? ""),
+        slug: String(formData.get("slug") ?? ""),
+        description: String(formData.get("description") ?? ""),
+        price: formData.get("price") ?? "0",
+        salePrice: formData.get("salePrice") || undefined,
+        categoryId: String(formData.get("categoryId") ?? ""),
+        colorVariants: uploadedVariants,
+        isFeatured: formData.get("isFeatured") === "on",
+        isPublished: formData.get("isPublished") === "on",
+      });
+
+      if (!parsed.success) {
+        setFormErrors(zodToFormErrors(parsed.error));
+        notify.validation();
+        setIsSubmitting(false);
+        return;
+      }
+
+      const data = parsed.data;
+      setFormErrors({});
+
       if (editingProduct) {
         await updateProduct({
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           id: editingProduct._id as any,
           updates: {
             name: data.name,
             slug: data.slug,
             description: data.description,
             price: data.price,
-            salePrice: data.salePrice,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            salePrice: data.salePrice === "" ? undefined : data.salePrice,
             categoryId: data.categoryId as any,
-            sizes: data.sizes,
-            colors: data.colors ?? [],
-            stock: data.stock,
-            images: data.images,
+            colorVariants: data.colorVariants,
             isFeatured: data.isFeatured,
             isPublished: data.isPublished,
           },
@@ -275,13 +267,9 @@ export default function ProductsPage() {
           slug: data.slug,
           description: data.description,
           price: data.price,
-          salePrice: data.salePrice,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          salePrice: data.salePrice === "" ? undefined : data.salePrice,
           categoryId: data.categoryId as any,
-          sizes: data.sizes,
-          colors: data.colors ?? [],
-          stock: data.stock,
-          images: data.images,
+          colorVariants: data.colorVariants,
           isFeatured: data.isFeatured,
           isPublished: data.isPublished,
         });
@@ -290,13 +278,14 @@ export default function ProductsPage() {
       resetDialogState();
     } catch (error) {
       notify.actionError("save product", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (productId: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await removeProduct({ id: productId as any });
       notify.deleted("Product");
     } catch (error) {
@@ -308,7 +297,6 @@ export default function ProductsPage() {
     const nextPublished = product.isPublished === false;
     try {
       await updateProduct({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         id: product._id as any,
         updates: {
           isPublished: nextPublished,
@@ -327,7 +315,6 @@ export default function ProductsPage() {
     let deletedCount = 0;
     for (const row of rows) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await removeProduct({ id: row._id as any });
         deletedCount += 1;
       } catch (error) {
@@ -340,7 +327,7 @@ export default function ProductsPage() {
     }
   };
 
-  if (products === undefined || categories === undefined || sizes === undefined) {
+  if (products === undefined || categories === undefined) {
     return (
       <div>
         <h1 className="text-3xl font-bold mb-8">Products</h1>
@@ -360,7 +347,7 @@ export default function ProductsPage() {
       </div>
 
       <AdminDataTable
-        data={(products as Product[]) || []}
+        data={(products as any[]) || []}
         getRowId={(product) => product._id}
         emptyTitle="Empty"
         emptyDescription="No products found."
@@ -433,8 +420,19 @@ export default function ProductsPage() {
             searchAccessor: (product) =>
               `${product.price} ${product.salePrice ?? ""} ${product.isFeatured ? "featured" : ""}`,
             cell: (product) => {
-              const displayPrice = product.salePrice ?? product.price;
-              return <span className="font-medium tabular-nums">Ks {displayPrice.toLocaleString()}</span>;
+              const hasDiscount = !!product.salePrice && product.salePrice > 0 && product.salePrice < product.price;
+              return (
+                <div className="flex flex-col">
+                  {hasDiscount ? (
+                    <>
+                      <span className="text-[10px] text-muted-foreground line-through">Ks {product.price.toLocaleString()}</span>
+                      <span className="font-medium text-destructive tabular-nums bg-destructive/10 px-1.5 py-0.5 rounded-sm w-fit">Ks {product.salePrice!.toLocaleString()}</span>
+                    </>
+                  ) : (
+                    <span className="font-medium tabular-nums">Ks {product.price.toLocaleString()}</span>
+                  )}
+                </div>
+              );
             },
           },
         ] satisfies AdminTableColumn<Product>[]}
@@ -486,19 +484,19 @@ export default function ProductsPage() {
 
             <Field invalid={Boolean(formErrors.description)}>
               <FieldLabel htmlFor="description">Description *</FieldLabel>
-              <Input
+              <RichTextEditor
                 id="description"
                 name="description"
                 defaultValue={editingProduct?.description}
                 aria-invalid={Boolean(formErrors.description)}
-                required
+                key={editingProduct?._id || "new"}
               />
               <FieldDescription className={!formErrors.description ? "invisible" : undefined}>
                 {formErrors.description ?? " "}
               </FieldDescription>
             </Field>
 
-            <div className="grid grid-cols-3 items-start gap-4">
+            <div className="grid grid-cols-2 items-start gap-4">
               <Field invalid={Boolean(formErrors.price)}>
                 <FieldLabel htmlFor="price">Price (Ks) *</FieldLabel>
                 <Input
@@ -514,30 +512,17 @@ export default function ProductsPage() {
                 </FieldDescription>
               </Field>
               <Field invalid={Boolean(formErrors.salePrice)}>
-                <FieldLabel htmlFor="salePrice">Sale Price (Ks)</FieldLabel>
+                <FieldLabel htmlFor="salePrice">Discount Price (Ks)</FieldLabel>
                 <Input
                   id="salePrice"
                   name="salePrice"
                   type="number"
                   defaultValue={editingProduct?.salePrice}
                   aria-invalid={Boolean(formErrors.salePrice)}
+                  placeholder="Optional"
                 />
                 <FieldDescription className={!formErrors.salePrice ? "invisible" : undefined}>
                   {formErrors.salePrice ?? " "}
-                </FieldDescription>
-              </Field>
-              <Field invalid={Boolean(formErrors.stock)}>
-                <FieldLabel htmlFor="stock">Stock *</FieldLabel>
-                <Input
-                  id="stock"
-                  name="stock"
-                  type="number"
-                  defaultValue={editingProduct?.stock}
-                  aria-invalid={Boolean(formErrors.stock)}
-                  required
-                />
-                <FieldDescription className={!formErrors.stock ? "invisible" : undefined}>
-                  {formErrors.stock ?? " "}
                 </FieldDescription>
               </Field>
             </div>
@@ -561,66 +546,34 @@ export default function ProductsPage() {
               </FieldDescription>
             </Field>
 
-            <Field invalid={Boolean(formErrors.sizes)}>
-              <FieldLabel>Sizes</FieldLabel>
-              {availableSizes.length === 0 ? (
-                <div className="rounded-md border border-dashed px-3 py-3 text-sm text-muted-foreground">
-                  No sizes found. Create sizes in Catalog Tools → Sizes first.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {groupedSizes.map(([category, categorySizes]) => (
-                    <div key={category} className="space-y-2">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        {category}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {categorySizes.map((size) => (
-                          <Button
-                            key={size._id}
-                            type="button"
-                            variant={selectedSizes.includes(size.name) ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => {
-                              setSelectedSizes((prev) =>
-                                prev.includes(size.name)
-                                  ? prev.filter((value) => value !== size.name)
-                                  : [...prev, size.name]
-                              );
-                            }}
-                          >
-                            {size.name}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <FieldDescription className={!formErrors.sizes ? "invisible" : undefined}>
-                {formErrors.sizes ?? " "}
-              </FieldDescription>
-            </Field>
+            <div className="border-t border-border pt-4">
+              <div className="flex items-center justify-between mb-4">
+                <FieldLabel>Color Variants</FieldLabel>
+                <Button type="button" variant="outline" size="sm" onClick={handleAddVariant}>
+                  <Plus className="size-4 mr-1" />
+                  Add Color
+                </Button>
+              </div>
 
-            <Field invalid={Boolean(formErrors.images)}>
-              <AdminMediaUploader
-                label="Images"
-                files={uploadedImages}
-                previews={uploadedImagePreviews}
-                onFilesChange={setUploadedImages}
-                onPreviewsChange={setUploadedImagePreviews}
-                requestUploadUrl={() => generateUploadUrl({})}
-                accept="image/*"
-                multiple
-                maxFiles={8}
-                previewKind="image"
-                compressImages
-                successMessage="Image uploaded as WebP (max 1920x1080)"
-              />
-              <FieldDescription className={!formErrors.images ? "invisible" : undefined}>
-                {formErrors.images ?? " "}
-              </FieldDescription>
-            </Field>
+              <div className="space-y-3">
+                {colorVariants.map((variant, index) => (
+                  <VariantCard
+                    key={variant.id}
+                    variant={variant}
+                    index={index}
+                    isOpen={expandedVariantIndex === index}
+                    onToggleOpen={() => setExpandedVariantIndex(expandedVariantIndex === index ? null : index)}
+                    onUpdate={(updated) => handleUpdateVariant(index, updated)}
+                    onRemove={() => handleRemoveVariant(index)}
+                    canRemove={colorVariants.length > 1}
+                    copySourceVariants={colorVariants
+                      .filter((_, i) => i !== index)
+                      .map((cv, i) => ({ id: String(i), colorName: cv.colorName || `Variant ${i + 1}` }))}
+                    onCopyMeasurements={(sourceId) => handleCopyMeasurements(parseInt(sourceId), index)}
+                  />
+                ))}
+              </div>
+            </div>
 
             <div className="flex items-center space-x-2">
               <Switch
@@ -641,11 +594,11 @@ export default function ProductsPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={resetDialogState}>
+              <Button type="button" variant="outline" onClick={resetDialogState} disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={availableSizes.length === 0}>
-                {editingProduct ? "Update" : "Create"} Product
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Saving..." : editingProduct ? "Update Product" : "Create Product"}
               </Button>
             </div>
           </form>

@@ -3,7 +3,6 @@ import { mutation, query, type MutationCtx } from "./_generated/server";
 import { nanoid } from "nanoid";
 import type { Doc, Id } from "./_generated/dataModel";
 
-// Generate unique order number.
 function generateOrderNumber(): string {
   const date = new Date();
   const year = date.getFullYear();
@@ -11,35 +10,31 @@ function generateOrderNumber(): string {
   return `ORD-${year}-${random}`;
 }
 
-async function findVariantBySelection(
+async function findColorVariantBySelection(
   ctx: MutationCtx,
   selection: { productId: Id<"products">; color: string; size: string }
-): Promise<Doc<"productVariants"> | null> {
-  const variants = await ctx.db
-    .query("productVariants")
-    .withIndex("by_product", (q) => q.eq("productId", selection.productId))
-    .collect();
+): Promise<{ product: Doc<"products">; colorVariantIndex: number } | null> {
+  const product = await ctx.db.get(selection.productId);
+  if (!product) {
+    return null;
+  }
 
-  const activeVariants = variants.filter((variant) => variant.isActive);
+  const colorVariants = product.colorVariants ?? [];
 
-  for (const variant of activeVariants) {
-    const [color, size] = await Promise.all([
-      ctx.db.get(variant.colorId),
-      ctx.db.get(variant.sizeId),
-    ]);
-
-    if (
-      color?.name.toLowerCase() === selection.color.toLowerCase() &&
-      size?.name.toLowerCase() === selection.size.toLowerCase()
-    ) {
-      return variant;
+  for (let i = 0; i < colorVariants.length; i++) {
+    const cv = colorVariants[i];
+    if (cv.colorName.toLowerCase() === selection.color.toLowerCase()) {
+      return { product, colorVariantIndex: i };
     }
   }
 
-  return activeVariants.find((variant) => variant.isPrimary) || activeVariants[0] || null;
+  if (colorVariants.length > 0) {
+    return { product, colorVariantIndex: 0 };
+  }
+
+  return null;
 }
 
-// Create new order.
 export const create = mutation({
   args: {
     customerId: v.optional(v.id("users")),
@@ -52,6 +47,7 @@ export const create = mutation({
     items: v.array(
       v.object({
         productId: v.id("products"),
+        colorVariantId: v.optional(v.string()),
         name: v.string(),
         size: v.string(),
         color: v.string(),
@@ -71,7 +67,7 @@ export const create = mutation({
 
     const itemsWithVariants: Array<{
       productId: Id<"products">;
-      variantId?: Id<"productVariants">;
+      colorVariantId?: string;
       name: string;
       size: string;
       color: string;
@@ -80,26 +76,40 @@ export const create = mutation({
     }> = [];
 
     for (const item of args.items) {
-      const variant = await findVariantBySelection(ctx, {
+      const result = await findColorVariantBySelection(ctx, {
         productId: item.productId,
         color: item.color,
         size: item.size,
       });
 
-      if (variant) {
-        if (variant.stockQuantity < item.quantity) {
+      if (result) {
+        const { product, colorVariantIndex } = result;
+        const colorVariants = [...(product.colorVariants ?? [])];
+        const cv = colorVariants[colorVariantIndex];
+
+        const currentStock = cv.stock?.[item.size] ?? 0;
+
+        if (currentStock < item.quantity) {
           throw new Error(`Not enough stock for ${item.name} (${item.color}/${item.size})`);
         }
 
-        await ctx.db.patch(variant._id, {
-          stockQuantity: variant.stockQuantity - item.quantity,
+        colorVariants[colorVariantIndex] = {
+          ...cv,
+          stock: {
+            ...cv.stock,
+            [item.size]: currentStock - item.quantity,
+          },
+        };
+
+        await ctx.db.patch(product._id, {
+          colorVariants,
           updatedAt: now,
         });
       }
 
       itemsWithVariants.push({
         ...item,
-        variantId: variant?._id,
+        colorVariantId: result ? `cv-${result.colorVariantIndex}` : undefined,
       });
     }
 
@@ -117,7 +127,6 @@ export const create = mutation({
   },
 });
 
-// Update order status.
 export const updateStatus = mutation({
   args: {
     id: v.id("orders"),
@@ -136,25 +145,34 @@ export const updateStatus = mutation({
       throw new Error("Order not found");
     }
 
-    // If cancelling, restore variant stock.
     if (status === "cancelled" && order.status !== "cancelled") {
       for (const item of order.items) {
-        let variant = item.variantId ? await ctx.db.get(item.variantId) : null;
+        const result = await findColorVariantBySelection(ctx, {
+          productId: item.productId,
+          color: item.color,
+          size: item.size,
+        });
 
-        if (!variant) {
-          variant = await findVariantBySelection(ctx, {
-            productId: item.productId,
-            color: item.color,
-            size: item.size,
-          });
-        }
-
-        if (!variant) {
+        if (!result) {
           continue;
         }
 
-        await ctx.db.patch(variant._id, {
-          stockQuantity: variant.stockQuantity + item.quantity,
+        const { product, colorVariantIndex } = result;
+        const colorVariants = [...(product.colorVariants ?? [])];
+        const cv = colorVariants[colorVariantIndex];
+
+        const currentStock = cv.stock?.[item.size] ?? 0;
+
+        colorVariants[colorVariantIndex] = {
+          ...cv,
+          stock: {
+            ...cv.stock,
+            [item.size]: currentStock + item.quantity,
+          },
+        };
+
+        await ctx.db.patch(product._id, {
+          colorVariants,
           updatedAt: Date.now(),
         });
       }
@@ -167,7 +185,6 @@ export const updateStatus = mutation({
   },
 });
 
-// Get order by number.
 export const getByNumber = query({
   args: { orderNumber: v.string() },
   handler: async (ctx, { orderNumber }) => {
@@ -180,7 +197,6 @@ export const getByNumber = query({
   },
 });
 
-// Get orders by customer.
 export const getByCustomer = query({
   args: { customerId: v.id("users") },
   handler: async (ctx, { customerId }) => {
@@ -194,7 +210,6 @@ export const getByCustomer = query({
   },
 });
 
-// Get all orders (admin).
 export const getAll = query({
   args: {
     status: v.optional(
@@ -234,7 +249,6 @@ export const getAll = query({
   },
 });
 
-// Get today's orders with stats.
 export const getTodayStats = query({
   args: {},
   handler: async (ctx) => {

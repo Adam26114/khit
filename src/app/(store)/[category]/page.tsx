@@ -17,19 +17,6 @@ import {
 } from "@/components/ui/sheet";
 import { useQuery, api } from "@/lib/convex";
 
-const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
-const colorOptions = [
-  { name: "White", hex: "#FFFFFF" },
-  { name: "Black", hex: "#000000" },
-  { name: "Navy", hex: "#1e3a5f" },
-  { name: "Blue", hex: "#4169e1" },
-  { name: "Beige", hex: "#d4c5b0" },
-  { name: "Pink", hex: "#ffc0cb" },
-  { name: "Light Blue", hex: "#add8e6" },
-  { name: "Mint", hex: "#98ff98" },
-  { name: "Lavender", hex: "#e6e6fa" },
-];
-
 interface PageProps {
   params: { category: string };
 }
@@ -41,6 +28,9 @@ export default function CategoryPage({ params }: PageProps) {
   
   const categorySlug = params.category;
   const categoryName = categorySlug.toUpperCase();
+
+  const sizes = useQuery(api.sizes.getAll, {});
+  const colors = useQuery(api.colors.getAll, { includeInactive: true });
 
   // Fetch filtered products from Convex
   const products = useQuery(
@@ -73,17 +63,17 @@ export default function CategoryPage({ params }: PageProps) {
       <div>
         <h4 className="font-medium mb-3">Size</h4>
         <div className="flex flex-wrap gap-2">
-          {sizes.map((size) => (
+          {(sizes ?? []).map((size) => (
             <button
-              key={size}
-              onClick={() => toggleSize(size)}
+              key={size._id}
+              onClick={() => toggleSize(size.name)}
               className={`w-10 h-10 border text-sm font-medium transition-colors ${
-                selectedSizes.includes(size)
+                selectedSizes.includes(size.name)
                   ? "border-black bg-black text-white"
                   : "border-gray-300 hover:border-gray-400"
               }`}
             >
-              {size}
+              {size.name}
             </button>
           ))}
         </div>
@@ -93,16 +83,16 @@ export default function CategoryPage({ params }: PageProps) {
       <div>
         <h4 className="font-medium mb-3">Color</h4>
         <div className="flex flex-wrap gap-3">
-          {colorOptions.map((color) => (
+          {(colors ?? []).map((color) => (
             <button
-              key={color.name}
+              key={color._id}
               onClick={() => toggleColor(color.name)}
               className={`w-8 h-8 rounded-full border-2 ${
                 selectedColors.includes(color.name)
                   ? "border-black"
                   : "border-transparent"
               }`}
-              style={{ backgroundColor: color.hex }}
+              style={{ backgroundColor: color.hexCode }}
               title={color.name}
             />
           ))}
