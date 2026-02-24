@@ -1,147 +1,146 @@
-# Khit E-Commerce Platform
+# KHIT E-Commerce Platform
 
-Premium menswear e-commerce platform for **Khit (Myanmar local fashion brand)** built with **Next.js 14**, **Convex**, **Better Auth**, **shadcn/ui**, and **Bun**.
+Premium Myanmar fashion storefront and admin panel, built with **Next.js 14 + Convex + Better Auth + Bun**.
 
-## Current Status
+Last updated: **February 24, 2026**
 
-**As of 2026-02-17**
+## Overview
 
-- Phase 1 (storefront backend integration): complete
-- Phase 2 (authentication + customer account): complete
-- Phase 3 (admin panel): implemented with expanded catalog tooling
-- Variant/media model migration: implemented (products + variants + colors + sizes + media)
-- Variant image selection (frontend + backend fallback): implemented
+This repository powers:
 
-## Core Features
+- Customer-facing storefront (product browsing, cart, checkout, order confirmation)
+- Customer account flows (login/register/profile/order history)
+- Admin workspace (dashboard, product management, category management, order operations)
+- Convex backend for catalog, orders, users, cart, and wishlist data
+
+## Feature Snapshot
+
+| Area | Implemented |
+| --- | --- |
+| Storefront | Homepage, category pages, product detail, cart drawer, checkout (COD), order confirmation |
+| Authentication | Better Auth email/password login + register, session-aware routing |
+| Customer Account | Profile editing, order history page |
+| Admin Core | Dashboard, products CRUD, categories CRUD, orders status updates |
+| Admin UI System | Sidebar shell, theme toggle (light/dark), reusable data table, zod validation, sonner notifications |
+| Media Handling | Convex storage upload URL flow + `/api/storage/[id]` signed URL proxy |
+
+## Route Map
 
 ### Storefront
 
-- Homepage with hero, category blocks, featured products, skeleton loading, and empty state CTA
-- Product listing by category with filtering and sorting
-- Product detail page with:
-  - Color + size selection
-  - Variant-aware image gallery
-  - Graceful fallback when selected variant has no media
-- Cart and checkout (COD)
-- Order confirmation
-- Login / register / account / order history
+- `/`
+- `/[category]`
+- `/products/[slug]`
+- `/checkout`
+- `/order-confirmation/[id]`
+- `/login`
+- `/register`
+- `/account`
+- `/account/orders`
 
-### Admin Panel
+### Admin
 
-Implemented pages:
+- `/admin`
+- `/admin/products`
+- `/admin/categories`
+- `/admin/orders`
 
-- `/admin` dashboard stats
-- `/admin/orders` order status management
-- `/admin/products` CRUD + media upload
-- `/admin/categories` CRUD
-- `/admin/colors` CRUD
-- `/admin/sizes` CRUD
-- `/admin/variants` CRUD
-- `/admin/media` CRUD + upload + variant association
+### Placeholder Pages
 
-Current placeholders:
+- `/admin/inventory`
+- `/admin/users`
+- `/admin/settings`
 
-- `/admin/inventory` (coming soon)
-- `/admin/users` (coming soon)
-- `/admin/settings` (coming soon)
+## Tech Stack
 
-Admin UI includes:
-
-- Shadcn sidebar layout (`variant="inset"`, `collapsible="icon"`)
-- Light/dark mode toggle
-- Reusable `AdminDataTable` with search, sort, column visibility, pagination, row selection, bulk actions
-- Sonner notifications + zod form validation patterns
-
-## Variant/Media Model
-
-Convex schema uses these core tables:
-
-- `products`
-- `productVariants`
-- `colors`
-- `sizes`
-- `media`
-- `cartItems`
-- `wishlistItems`
-
-### Image association behavior
-
-- Media is linked to `variantId`
-- On media create, upload is auto-linked to all active variants with same `(productId, colorId)` to cover all sizes for that color
-- Product responses include variant media and fallback chain:
-  - own variant media
-  - same-color sibling variant media
-  - first available product variant media
-  - legacy product images
-
-This supports color-based image switching while keeping fallback-safe behavior.
+| Layer | Tools |
+| --- | --- |
+| Frontend | Next.js 14 (App Router), React 18, Tailwind CSS, shadcn/ui, Radix UI |
+| Backend | Convex |
+| Auth | Better Auth + `@convex-dev/better-auth` |
+| Validation | Zod + React Hook Form |
+| Monitoring | Sentry (`@sentry/nextjs`) |
+| Runtime & Package Manager | Bun |
 
 ## Quick Start
 
-### Prerequisites
-
-- Bun
-- Node.js 18+
-
-### Install
+### 1. Install dependencies
 
 ```bash
 cd local-brand-khit
 bun install
+```
+
+### 2. Configure environment
+
+```bash
 cp .env.local.example .env.local
 ```
 
-Generate auth secret:
+Generate a secure auth secret:
 
 ```bash
 openssl rand -base64 32
 ```
 
-### Run Convex + Next.js
+### 3. Run backend and app
 
 ```bash
-# terminal 1
+# Terminal 1
 bunx convex dev
 
-# terminal 2
+# Terminal 2
 bun run dev
 ```
 
-Open: [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000)
 
 ## Environment Variables
 
-| Variable | Description | Required |
+| Variable | Required | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_APP_URL` | App URL | Yes |
-| `CONVEX_DEPLOYMENT` | Convex deployment name/url | Yes |
-| `NEXT_PUBLIC_CONVEX_URL` | Convex cloud URL (for client + API route proxy) | Yes |
-| `NEXT_PUBLIC_CONVEX_SITE_URL` | Convex site URL (Better Auth helper) | Recommended |
-| `CONVEX_SITE_URL` | Fallback site URL for Better Auth helper | Optional |
-| `BETTER_AUTH_SECRET` | Better Auth secret | Yes |
-| `INITIAL_ADMIN_EMAIL` | Comma-separated emails auto-treated as admin | Yes |
-| `SENTRY_DSN` | Sentry DSN | Optional |
+| `NEXT_PUBLIC_APP_URL` | Yes | Public app URL (ex: `http://localhost:3000`) |
+| `CONVEX_DEPLOYMENT` | Yes | Convex deployment identifier |
+| `NEXT_PUBLIC_CONVEX_URL` | Yes | Convex URL used by client + server helpers |
+| `BETTER_AUTH_SECRET` | Yes | Better Auth signing/encryption secret |
+| `INITIAL_ADMIN_EMAIL` | Yes | Comma-separated email(s) granted admin role |
+| `NEXT_PUBLIC_CONVEX_SITE_URL` | Optional | Better Auth Convex site URL helper |
+| `CONVEX_SITE_URL` | Optional | Fallback for Convex site URL helper |
+| `SENTRY_DSN` | Optional | Server/edge Sentry DSN |
+| `NEXT_PUBLIC_SENTRY_DSN` | Optional | Client-side Sentry DSN |
 
-## One-Time Migration (Legacy Products -> Variant Model)
+See `.env.local.example` for starter values.
 
-If legacy products exist without variants:
+## Available Commands
 
-```bash
-# dry run
-bunx convex run products:migrateLegacyProductsToVariantModel '{"dryRun": true}'
+| Command | Description |
+| --- | --- |
+| `bun run dev` | Start Next.js development server |
+| `bun run build` | Build production app |
+| `bun run start` | Start production server |
+| `bun run lint` | Run ESLint |
+| `bunx convex dev` | Start Convex development runtime |
+| `bunx tsc --noEmit` | Run TypeScript type checking |
 
-# apply
-bunx convex run products:migrateLegacyProductsToVariantModel '{"dryRun": false}'
-```
+## Data Model (Current)
 
-## Scripts
+Primary Convex tables in `convex/schema.ts`:
 
-- `bun run dev` - Next.js dev server
-- `bun run build` - Production build
-- `bun run start` - Run production build
-- `bun run lint` - ESLint
-- `bunx tsc --noEmit` - Type check
-- `bunx convex dev` - Convex dev runtime
+- `users`
+- `categories`
+- `products` (includes `colorVariants` for size/stock/image grouping)
+- `cartItems`
+- `wishlistItems`
+- `orders`
+
+Key backend modules:
+
+- `convex/products.ts`
+- `convex/categories.ts`
+- `convex/orders.ts`
+- `convex/users.ts`
+- `convex/cart.ts`
+- `convex/wishlist.ts`
 
 ## Project Structure
 
@@ -156,23 +155,26 @@ local-brand-khit/
 │   │   ├── admin/
 │   │   ├── store/
 │   │   └── ui/
-│   └── lib/
+│   ├── lib/
+│   └── providers/
 ├── convex/
 │   ├── schema.ts
 │   ├── products.ts
-│   ├── variants.ts
-│   ├── media.ts
-│   ├── colors.ts
-│   └── sizes.ts
+│   ├── categories.ts
+│   ├── orders.ts
+│   ├── users.ts
+│   ├── cart.ts
+│   └── wishlist.ts
 └── project-tasks/
 ```
 
 ## Notes
 
-- Use `bun` for all package commands in this repo.
-- Image previews in admin uploader use client-side compression to WebP (target max 1920x1080).
-- Storage IDs are resolved through `/api/storage/[id]` proxy route.
+- Use **Bun only** for dependency and script execution in this repository.
+- Cart state is currently persisted in browser local storage (`khit-cart`).
+- Product image uploads are compressed to WebP on the client, then uploaded via Convex.
+- No automated test suite is configured yet.
 
 ## License
 
-Private - All rights reserved.
+Private repository. All rights reserved.
