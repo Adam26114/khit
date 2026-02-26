@@ -144,4 +144,15 @@ export default defineSchema({
     .index("by_customer", ["customerId"])
     .index("by_status", ["status"])
     .index("by_createdAt", ["createdAt"]),
+
+  storeSettings: defineTable({
+    heroBannerLine1: v.optional(v.string()),
+    heroBannerLine2: v.optional(v.string()),
+    contactEmail: v.optional(v.string()),
+    contactPhone: v.optional(v.string()),
+    storeAddress: v.optional(v.string()),
+    facebookUrl: v.optional(v.string()),
+    instagramUrl: v.optional(v.string()),
+    updatedAt: v.number(),
+  }),
 });

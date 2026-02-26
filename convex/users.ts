@@ -16,6 +16,25 @@ function isInitialAdminEmail(email?: string | null): boolean {
   return adminEmails.includes(normalizedEmail);
 }
 
+// Helper to assert admin privileges in server functions
+export async function requireAdmin(ctx: any) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Unauthorized");
+  }
+
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_betterAuthId", (q: any) => q.eq("betterAuthId", identity.subject))
+    .unique();
+
+  if (user?.role === "admin" || isInitialAdminEmail(identity.email)) {
+    return user;
+  }
+
+  throw new Error("Forbidden");
+}
+
 // Get user by Better Auth ID
 export const getByBetterAuthId = query({
   args: { betterAuthId: v.string() },
@@ -67,6 +86,64 @@ export const getAll = query({
 
     return users;
   },
+});
+
+export const getUsersWithStats = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    
+    const users = await ctx.db.query("users").order("desc").collect();
+    
+    // Fetch order stats for each user
+    const usersWithStats = await Promise.all(
+      users.map(async (user) => {
+        const orders = await ctx.db
+          .query("orders")
+          .withIndex("by_customer", (q) => q.eq("customerId", user._id))
+          .collect();
+          
+        const totalOrders = orders.length;
+        const totalSpent = orders.reduce((sum, order) => {
+          // Only count confirmed/shipped/delivered orders
+          if (["cancelled", "pending"].includes(order.status)) return sum;
+          return sum + order.total;
+        }, 0);
+        
+        return {
+          ...user,
+          totalOrders,
+          totalSpent,
+        };
+      })
+    );
+    
+    return usersWithStats;
+  },
+});
+
+export const getUserWithOrders = query({
+  args: { id: v.id("users") },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    
+    const user = await ctx.db.get(args.id);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    const orders = await ctx.db
+      .query("orders")
+      .withIndex("by_customer", (q) => q.eq("customerId", user._id))
+      .order("desc")
+      .collect();
+      
+    // Format orders slightly
+    return {
+      user,
+      orders,
+    };
+  }
 });
 
 // Update user role (admin only)

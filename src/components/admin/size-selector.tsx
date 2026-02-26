@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { ALL_SIZES, type Size } from "@/lib/product-types";
+import { ALL_SIZES, type Size, getSizeDisplayName } from "@/lib/product-types";
 
 interface SizeSelectorProps {
   selected: Size[];
@@ -25,7 +25,7 @@ export function SizeSelector({ selected, onToggle }: SizeSelectorProps) {
                 : "border-border bg-secondary text-muted-foreground hover:border-primary/40 hover:text-foreground"
             )}
           >
-            {size}
+            {getSizeDisplayName(size)}
           </button>
         );
       })}

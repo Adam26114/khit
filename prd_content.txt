@@ -1,0 +1,1534 @@
+
+
+
+
+PRODUCT REQUIREMENTS DOCUMENT
+Myanmar Local Brand Shirt E-Commerce Platform
+Inspired by Mango.com  ·  Built for Myanmar
+Version
+1.0.0
+Date
+February 2026
+Status
+Draft — Ready for Review
+Reference
+shop.mango.com
+
+
+
+
+
+
+
+
+
+1. Project Overview
+
+1.1 Executive Summary
+This document defines the full product requirements for a Myanmar local brand shirt e-commerce platform. The platform draws design and UX inspiration from Mango (shop.mango.com), adapting its clean, minimal aesthetic for a local Myanmar fashion brand. The platform will serve customers browsing and purchasing shirts online, while providing administrators with full control over inventory, orders, and storefront content.
+
+1.2 Project Goals
+	•	Build a world-class, minimal white e-commerce experience for a Myanmar local shirt brand
+	•	Deliver a fully functional storefront with product browsing, filtering, and checkout
+	•	Provide robust admin controls for product, order, inventory, and user management
+	•	Support Myanmar-specific delivery options: nationwide shipping and store pickup
+	•	Accept Cash on Delivery (COD) as the sole payment method at launch
+	•	Establish error monitoring, code quality gates, and authentication best practices
+
+1.3 Success Metrics
+Metric
+Target
+Timeline
+Storefront page load (LCP)
+< 2.5 seconds
+MVP Launch
+Mobile responsiveness score
+> 90 (Lighthouse)
+MVP Launch
+Admin order processing time
+< 30 seconds per order
+MVP Launch
+Error rate (Sentry)
+< 1% of sessions
+30 days post-launch
+Checkout completion rate
+> 60%
+60 days post-launch
+
+
+
+2. Technology Stack
+
+All technology choices are locked at project inception. Deviations require a formal change request and re-review.
+
+Layer
+Technology
+Purpose / Notes
+Frontend Framework
+Next.js 14+ (App Router)
+SSR, SSG, Image Optimization, Routing
+UI Component Library
+shadcn/ui (Nova preset)
+Accessible components — installed via MCP server with Radix base, neutral theme, Inter font, subtle menu accent
+shadcn MCP Server
+bunx shadcn@latest mcp
+AI-assisted component browsing and installation from shadcn registry
+Admin Dashboard Template
+shadcn dashboard-01
+Pre-built admin layout: bunx shadcn@latest add dashboard-01
+Data Tables
+shadcn/ui DataTable
+Sortable, filterable, searchable tables with pagination, row selection, column visibility
+Backend / Database
+Convex
+Real-time backend, serverless functions, reactive queries
+Authentication
+Better Auth
+Session management, role-based access (customer / admin)
+Error Monitoring
+Sentry
+Frontend + backend error tracking; performance monitoring
+Icon Library
+Phosphor Icons (Duotone)
+Consistent duotone icon set across all UI surfaces
+Typography
+Neue Helvetica Paneuropean
+Primary brand typeface — clean, neutral, editorial
+Version Control
+GitHub
+Source code hosting; PR-based workflow
+Code Review / QA
+CodeRabbit
+Automated AI code review on every PR
+Package Manager
+Bun
+All installs, scripts, and builds use Bun — no npm or yarn
+CSS Utility
+Tailwind CSS
+Utility-first styling; paired with shadcn/ui tokens
+Deployment
+Vercel
+Zero-config Next.js deployment; preview environments per PR
+
+
+2.1 Design System Principles
+	•	Package manager: Bun — use bun install, bun run, bun add, bun x (never npm or yarn)
+	•	Color palette: White (#FFFFFF) primary background, Black (#000000) primary text, Light Gray (#F5F5F5) surfaces
+	•	Typography: Neue Helvetica Paneuropean — Regular for body, Medium for labels, Bold for headings
+	•	Icons: Phosphor Duotone — consistent weight and two-tone treatment across all components
+	•	Spacing: 4px base unit, multiples of 4 throughout (8, 12, 16, 24, 32, 48, 64, 96)
+	•	Border radius: 2px for product cards, 4px for buttons, 8px for modals
+	•	Motion: Minimal — 150ms ease transitions only; no decorative animations
+
+
+2.2 shadcn MCP Server Configuration
+The project uses shadcn's Model Context Protocol (MCP) server for AI-assisted component installation and management. This enables natural language component discovery and installation during development.
+
+Initial Setup
+Command
+Purpose
+bunx shadcn@latest create --preset "https://ui.shadcn.com/init?base=radix&style=nova&baseColor=neutral&theme=neutral&iconLibrary=lucide&font=inter&menuAccent=subtle&menuColor=default&radius=default&template=next&rtl=false" --template next
+Initialize project with Nova preset (Radix base, neutral theme, Inter font, subtle accents)
+bunx shadcn@latest mcp init --client codex
+Configure MCP server for Codex (or Claude Code / Cursor)
+bunx shadcn@latest add dashboard-01
+Install pre-built admin dashboard template
+
+MCP Configuration File (.mcp.json)
+Add to project root for Claude Code / Cursor integration:
+
+Client
+Config Location
+Server Start Command
+Claude Code
+.mcp.json
+Auto-starts on Claude Code launch
+Cursor
+.cursor/mcp.json
+Enable in Cursor Settings after config
+VS Code (Copilot)
+.vscode/mcp.json
+Click 'Start' next to shadcn server
+Codex
+~/.codex/config.toml
+Add [mcp_servers.shadcn] section manually
+
+Example MCP Prompts During Development
+	•	'Show me all available components in the shadcn registry'
+	•	'Add button, dialog, card, and data-table components'
+	•	'Install form components with validation'
+	•	'Add all components needed for an admin dashboard'
+
+Component Installation Best Practices
+	•	Always use bunx instead of npx: bunx shadcn@latest add <component>
+	•	Components install to components/ui/ — never edit directly, customize via composition
+	•	MCP server respects components.json configuration for styling and imports
+	•	Use MCP during development; commit generated component files to Git
+
+
+
+3. System Architecture
+
+3.1 Application Structure
+The application follows a monorepo structure with clear separation of storefront, admin panel, and shared utilities.
+
+Directory
+Description
+app/(store)/
+Customer-facing storefront pages and layouts
+app/(admin)/
+Admin panel — protected route group, requires admin role
+app/api/
+Next.js API routes (webhooks, utility endpoints)
+convex/
+All Convex schema definitions, mutations, queries, and actions
+components/ui/
+shadcn/ui generated components — do not edit directly
+components/store/
+Storefront-specific composed components
+components/admin/
+Admin panel composed components
+components/shared/
+Shared components used in both store and admin
+lib/
+Utility functions, type definitions, constants
+public/
+Static assets — fonts, brand logo, OG images
+
+
+3.2 Data Models (Convex Schema)
+The database uses a normalized structure with separate tables for products, variants, colors, sizes, media, cart, and wishlist. This enables granular inventory control and flexible product configuration.
+
+Categories
+Field
+Type
+Notes
+_id
+Id<'categories'>
+Auto-generated Convex ID
+name
+string
+Category name (max 100 chars)
+slug
+string
+URL-safe slug (max 100 chars)
+parent_id
+Id<'categories'> | null
+For nested categories
+display_order
+number
+Sort order in navigation
+is_active
+boolean
+Visibility toggle
+created_at
+number
+Unix timestamp
+updated_at
+number
+Unix timestamp
+
+Products
+Field
+Type
+Notes
+_id
+Id<'products'>
+Auto-generated Convex ID
+sku
+string
+SKU code (max 100 chars, unique)
+name
+string
+Product name English (max 255 chars)
+name_burmese
+string
+Product name Myanmar (max 255 chars)
+description
+string
+Product description (text)
+description_burmese
+string
+Description Myanmar (text)
+category_id
+Id<'categories'>
+Foreign key to categories
+base_price
+number
+Base price in MMK (DECIMAL 10,2)
+is_featured
+boolean
+Show in featured sections
+is_active
+boolean
+Product visibility toggle
+created_at
+number
+Unix timestamp
+updated_at
+number
+Unix timestamp
+
+Product Variants
+Field
+Type
+Notes
+_id
+Id<'product_variants'>
+Auto-generated Convex ID
+product_id
+Id<'products'>
+Foreign key to products
+color_id
+Id<'colors'>
+Foreign key to colors (one color per variant)
+size
+string
+Size value (max 20 chars): XS, S, M, L, XL, XXL
+sku_variant
+string
+Variant SKU (max 100 chars, unique)
+price
+number
+Variant-specific price in MMK (DECIMAL 10,2)
+stock_quantity
+number
+Current inventory count (integer)
+is_active
+boolean
+Variant availability toggle
+display_order
+number
+Sort order for display
+created_at
+number
+Unix timestamp
+updated_at
+number
+Unix timestamp
+
+Colors
+Field
+Type
+Notes
+_id
+Id<'colors'>
+Auto-generated Convex ID
+name
+string
+Color name (max 50 chars)
+name_burmese
+string
+Color name Myanmar (max 50 chars)
+hex_code
+string
+Hex color code (max 7 chars): #FFFFFF
+swatch_image
+string | null
+Optional Convex storage ID for swatch
+is_active
+boolean
+Color availability toggle
+created_at
+number
+Unix timestamp
+updated_at
+number
+Unix timestamp
+
+Sizes
+Field
+Type
+Notes
+_id
+Id<'sizes'>
+Auto-generated Convex ID
+size_name
+string
+Size name (max 20 chars): XS, S, M, L, XL, XXL
+size_category
+string
+Category grouping (max 50 chars): shirts, t-shirts
+display_order
+number
+Sort order for display
+is_active
+boolean
+Size availability toggle
+created_at
+number
+Unix timestamp
+updated_at
+number
+Unix timestamp
+
+Media
+Field
+Type
+Notes
+_id
+Id<'media'>
+Auto-generated Convex ID
+variant_id
+Id<'product_variants'>
+Foreign key to product_variants
+media_type
+string
+ENUM: 'image' | 'video'
+file_path
+string
+Convex storage ID (max 500 chars)
+file_url
+string
+CDN URL (max 500 chars)
+thumbnail_url
+string
+Thumbnail URL (max 500 chars)
+alt_text
+string
+Alt text for accessibility (max 255 chars)
+display_order
+number
+Sort order for carousel
+is_primary
+boolean
+Primary image flag (one per variant)
+created_at
+number
+Unix timestamp
+updated_at
+number
+Unix timestamp
+
+Cart Items
+Field
+Type
+Notes
+_id
+Id<'cart_items'>
+Auto-generated Convex ID
+user_id
+Id<'users'>
+Foreign key to users
+variant_id
+Id<'product_variants'>
+Foreign key to product_variants
+quantity
+number
+Item quantity (integer)
+added_at
+number
+Unix timestamp
+
+Wishlist Items
+Field
+Type
+Notes
+_id
+Id<'wishlist_items'>
+Auto-generated Convex ID
+user_id
+Id<'users'>
+Foreign key to users
+variant_id
+Id<'product_variants'>
+Foreign key to product_variants
+added_at
+number
+Unix timestamp
+
+Orders
+Field
+Type
+Notes
+_id
+Id<'orders'>
+Auto-generated Convex ID
+orderNumber
+string
+Human-readable order ref e.g. ORD-2026-0001
+customerId
+Id<'users'> | null
+Null for guest checkout
+customerInfo
+object
+{ name, email, phone, address }
+items
+object[]
+Array of { variantId, qty, price }
+subtotal
+number
+Sum of items in MMK
+shippingFee
+number
+2500 MMK for shipping or 0 for pickup
+total
+number
+subtotal + shippingFee
+deliveryMethod
+string
+'shipping' | 'pickup'
+paymentMethod
+string
+'cod' (Cash on Delivery)
+status
+string
+pending → confirmed → processing → shipped → delivered | cancelled
+notes
+string
+Optional customer notes
+createdAt
+number
+Unix timestamp
+
+Users
+Field
+Type
+Notes
+_id
+Id<'users'>
+Auto-generated Convex ID
+email
+string
+Primary identifier
+name
+string
+Display name
+phone
+string
+Myanmar phone number
+role
+string
+'customer' | 'admin'
+betterAuthId
+string
+Better Auth session reference
+createdAt
+number
+Unix timestamp
+
+Key Relationships & Business Rules
+	•	Each product variant belongs to ONE product and ONE color
+	•	Each product variant can have MANY media items (images/videos)
+	•	Media carousel shows all images for selected variant on hover
+	•	Color change = variant change = image set change
+	•	Size buttons show availability from variant stock_quantity
+	•	First color in variant set is default display color
+	•	Primary image (is_primary=true) shown as product card thumbnail
+
+
+
+4. Customer Storefront — Feature Requirements
+
+4.1 Navigation & Header
+The header follows the Mango reference design: minimal top bar with brand name centered, utility actions (search, login, wishlist, bag) right-aligned, and category navigation below.
+
+Feature
+Requirement
+Priority
+Brand Logo
+Centered text logo — brand name in Neue Helvetica Bold
+P0
+Primary Nav
+WOMEN / MEN / NEW / SALE category links (adapt to brand)
+P0
+Mega Menu
+Hover/click reveals subcategory flyout panel (Mango-style)
+P1
+Search
+Full-text product search with instant results overlay
+P0
+Auth Actions
+Log In / My Account with Better Auth session
+P0
+Bag Icon
+Shows item count badge; opens cart drawer on click
+P0
+Sale Banner
+Dismissible red promotional banner below main nav
+P1
+Mobile Nav
+Hamburger menu opening full-screen drawer
+P0
+
+
+4.2 Homepage
+Section
+Description
+Priority
+Hero Banner
+Full-bleed editorial image with headline overlay and CTA links to collections
+P0
+Category Links
+Horizontal pills/cards linking to Men / Women / New Arrivals / Sale
+P0
+Featured Products
+4–8 product cards from isFeatured=true products
+P0
+Newsletter Signup
+Email input with 10% discount incentive (matches Mango reference)
+P1
+Social Links
+Instagram, Facebook, TikTok, YouTube footer icons
+P2
+
+
+4.3 Product Listing Page (PLP)
+Feature
+Requirement
+Priority
+Grid Layout
+3-column desktop, 2-column tablet, 1-column mobile; toggle between 2/3/4 col
+P0
+Filter & Sort
+Filter by: Size, Color, Price Range. Sort by: New, Price Low-High, Sale
+P0
+Product Card
+Product image (hover shows second image), name, original price, sale price
+P0
+Out of Stock
+Overlay or badge indicating sold out; size selector grays out OOS sizes
+P0
+Color Swatches
+Small color dots below card for quick color switching without page reload
+P1
+Quick Add
+Hover reveals size selector overlay for direct add-to-cart from PLP
+P1
+Pagination
+Infinite scroll or load-more button — preference for load-more
+P0
+Product Count
+Display total results count above the grid
+P0
+
+
+4.4 Product Detail Page (PDP)
+Mirrors the Mango PDP reference (Image 5): multi-image grid left, product info panel right with sticky behavior on scroll.
+
+Feature
+Requirement
+Priority
+Image Gallery
+Left column: 2-col image grid desktop; full-width swipeable on mobile
+P0
+Product Title
+Large heading with original + sale price and discount percentage
+P0
+Size Selector
+Horizontal size buttons; grayed-out for OOS; Size Guide link opens modal
+P0
+Color Selector
+Swatch buttons; switching color updates images and stock display
+P0
+Add to Cart
+Primary CTA button — full width black; triggers cart drawer open
+P0
+Wishlist
+Heart icon beside add; requires login or guest wishlist via localStorage
+P1
+Stock Indicator
+Low stock warning when stock < 5; Out of Stock state disables Add button
+P0
+Description
+Expandable accordion: Description, Care Instructions, Size & Fit
+P0
+Free Delivery Note
+'Free delivery to store' callout matching Mango reference
+P0
+Store Availability
+Link to check in-store availability at brand pickup location
+P1
+You May Also Like
+Horizontally scrollable related product cards below main content
+P1
+Breadcrumb
+MEN > SHIRTS > DENIM navigation crumbs
+P0
+
+
+4.5 Cart & Checkout
+Feature
+Requirement
+Priority
+Cart Drawer
+Right-side slide-over panel; shows items with qty controls and remove
+P0
+Order Summary
+Subtotal, shipping fee (2,500 MMK or FREE for pickup), total in MMK
+P0
+Checkout Form
+Name, Email, Phone, Delivery Address (required for shipping)
+P0
+Delivery Method
+Radio selection: Shipping (2,500 MMK, 1–3 days) or Store Pickup (free)
+P0
+Pickup Info
+On pickup selection, show store name, address, and hours
+P0
+Payment Method
+Cash on Delivery only — clearly displayed; no card input fields
+P0
+Order Notes
+Optional textarea for customer delivery instructions
+P1
+Order Confirmation
+Post-submit page with order number, summary, and 'Continue Shopping' CTA
+P0
+Guest Checkout
+Checkout without account creation; email used as identifier
+P0
+
+
+4.6 Authentication (Better Auth)
+Feature
+Requirement
+Priority
+Sign Up
+Email + password registration with email verification flow
+P0
+Sign In
+Email + password login; persistent session via Better Auth
+P0
+Forgot Password
+Email-based password reset flow
+P0
+Social Auth
+Optional: Google OAuth (Phase 2)
+P2
+Customer Account
+View order history, saved addresses, profile edit
+P1
+Role Guard
+Admin routes protected — redirect non-admin users to homepage
+P0
+Session Persistence
+7-day session cookie; re-auth required after expiry
+P0
+
+
+
+5. Delivery & Payment Specifications
+
+5.1 Delivery Methods
+Method
+Fee
+Timeframe
+Notes
+Shipping within Myanmar
+2,500 MMK
+1–3 business days
+Customer provides full delivery address. Confirmation SMS/email sent on dispatch.
+Store Pickup
+Free
+Ready within 24 hours
+Customer picks up from brand store. Store address + hours shown at checkout.
+
+Delivery method selection is mandatory at checkout. The shipping fee (2,500 MMK) is added to the order total automatically when 'Shipping' is selected. Store pickup displays the brand's physical store location details.
+
+
+5.2 Payment Methods
+Method
+Status
+Flow
+Cash on Delivery (COD)
+Launch — sole method
+Order placed → Confirmed by admin → Delivered → Cash collected
+Mobile Banking (Wave/KBZPay)
+Phase 2 consideration
+Not in scope for v1.0
+
+COD orders are confirmed after admin review. The order status transitions: pending → confirmed → processing → shipped → delivered. Admin can cancel orders from the panel.
+
+
+
+6. Admin Panel — Feature Requirements
+
+The Admin Panel is a protected section accessible only to users with role='admin'. It uses the same Next.js app with a separate route group (app/(admin)/). Design language matches the storefront — clean white, minimal, using shadcn/ui components and Phosphor Duotone icons.
+
+All admin data tables follow the shadcn DataTable pattern with comprehensive filtering, sorting, searching, and action capabilities.
+
+
+6.1 Data Table Specifications (All Admin Tables)
+Every admin page with tabular data (Orders, Products, Inventory, Users, Sizes, Colors, Categories) implements the full shadcn DataTable component with the following standardized features:
+
+Core Data Table Features
+Feature
+Implementation
+User Interaction
+Sortable Columns
+Click column header to toggle asc/desc/none
+Arrow icons indicate sort direction; neutral = no sort
+Global Search
+Input field above table searches across all visible columns
+Real-time filtering as user types; debounced 300ms
+Column Filters
+Dropdown/input per filterable column
+Apply multiple filters; show active filter badges
+Pagination
+Bottom controls: First, Prev, Page N of M, Next, Last
+Configurable rows per page: 10, 20, 50, 100
+Row Selection
+Checkbox column (select all / individual rows)
+Multi-select enables bulk actions in toolbar
+Rows Per Page
+Dropdown: 10 / 20 / 50 / 100 rows per page
+Persists selection in localStorage per table
+Column Visibility
+Columns button → checkboxes to show/hide columns
+Only selected columns displayed; persists in localStorage
+Row Actions
+Three-dot menu (⋮) on each row
+Update, Delete, Duplicate actions contextual per row
+Bulk Actions
+Toolbar appears when ≥1 rows selected
+Delete Selected, Export Selected, etc.
+Empty State
+Illustration + text when no data matches filters
+Clear Filters button to reset all active filters
+Loading State
+Skeleton rows during data fetch
+Spinners on sort/filter/pagination actions
+
+
+Column Filter Types by Data Type
+Column Type
+Filter UI
+Filter Logic
+Text (name, email, SKU)
+Text input with 'contains' match
+Case-insensitive substring search
+Enum (status, role, category)
+Multi-select dropdown with checkboxes
+Match any selected value (OR logic)
+Number (price, stock, quantity)
+Min/Max range inputs
+Inclusive range: value >= min AND value <= max
+Date (created_at, updated_at)
+Date range picker (from/to)
+Inclusive range: date >= from AND date <= to
+Boolean (is_active, is_featured)
+Tri-state toggle: All / True / False
+Show all, only true, or only false
+
+
+Action Buttons (Per Row Three-Dot Menu)
+Action
+Icon
+Behavior
+Availability
+Update
+Pencil (edit icon)
+Navigate to /admin/[resource]/[id]/edit page
+All tables
+Delete
+Trash (destructive red)
+Confirmation modal → soft delete (sets is_active=false) or hard delete
+All tables
+Duplicate
+Copy icon
+Clone row with '(Copy)' suffix on name; opens edit form pre-filled
+Products, Categories
+View Details
+Eye icon
+Navigate to detail page (read-only view)
+Orders, Users
+Cancel Order
+X icon (red)
+Order-specific: cancel + restore stock
+Orders table only
+
+
+Bulk Actions Toolbar (Shown When Rows Selected)
+Action
+Trigger
+Confirmation
+Delete Selected
+Trash button in toolbar
+Modal: 'Delete N items? This cannot be undone.' → Confirm / Cancel
+Export Selected (CSV)
+Download button
+Immediate CSV download of selected rows with all visible columns
+Toggle Active Status
+Toggle button (on Products/Categories)
+Batch update is_active field; refresh table
+Bulk Status Update
+Dropdown (on Orders)
+Change status of all selected orders to chosen value
+
+
+Column Visibility Management
+The 'Columns' dropdown button (top-right of table) opens a popover with checkboxes for each column. User selections persist per table in localStorage. Default visible columns per table:
+
+Table
+Default Visible Columns
+Hidden by Default
+Orders
+Order #, Customer, Date, Total, Status, Actions
+Items (details), Delivery Method, Notes, Created By
+Products
+Image, Name, Category, Price, Stock, Active, Actions
+SKU, Description, Burmese Name, Featured, Created/Updated
+Inventory
+Product, Variant SKU, Size, Color, Stock, Actions
+Display Order, Created/Updated
+Users
+Name, Email, Role, Joined Date, Actions
+Phone, Better Auth ID, Last Login
+Sizes / Colors
+Name, Category, Order, Active, Actions
+Burmese Name, Created/Updated
+
+
+Data Table Implementation Checklist (Per Admin Page)
+	•	Use shadcn DataTable component from bunx shadcn@latest add data-table
+	•	Implement column definitions with sortable: true for sortable columns
+	•	Add filterFn for each filterable column (text, enum, number, date, boolean)
+	•	Include checkbox column for row selection (enableRowSelection)
+	•	Implement three-dot action menu with Update, Delete, and context-specific actions
+	•	Add bulk actions toolbar that appears when rowSelection.length > 0
+	•	Implement column visibility toggle with localStorage persistence
+	•	Add pagination controls with rows-per-page selector
+	•	Create empty state component with 'No results' message and Clear Filters CTA
+	•	Add loading skeleton state with shimmer effect during data fetch
+	•	Ensure mobile responsiveness: horizontal scroll + sticky first column on small screens
+
+
+6.2 Admin Dashboard (Home)
+Widget
+Data Displayed
+Priority
+Orders Today
+Count + total GMV of orders created today
+P0
+Pending Orders
+Count of orders in 'pending' status needing action
+P0
+Total Revenue (MTD)
+Month-to-date revenue in MMK
+P0
+Low Stock Alert
+Products with stock < 5 units — click to manage
+P0
+Recent Orders
+Last 10 orders table with quick status toggle
+P0
+Sentry Error Rate
+Live error rate widget from Sentry embed
+P1
+Product Count
+Total active / inactive products
+P0
+
+
+6.3 Order Management
+Admin can view all customer orders with full details and manage their lifecycle. Uses standard Data Table (see 6.1) with order-specific filters and actions.
+
+Feature
+Requirement
+Priority
+Orders Table (DataTable)
+Implements all 6.1 specs: sortable, filterable, searchable, paginated, row selection
+P0
+Visible Columns (default)
+Order #, Customer Name, Date, Total MMK, Delivery Method, Status, Actions
+P0
+Status Filter
+Multi-select enum filter: All, Pending, Confirmed, Processing, Shipped, Delivered, Cancelled
+P0
+Date Range Filter
+Date picker for created_at: From date + To date with calendar widget
+P1
+Search
+Global search across: Order #, Customer Name, Phone, Email
+P0
+Order Detail View
+Click row → navigate to /admin/orders/[id] with full breakdown
+P0
+Status Update (row action)
+Dropdown in detail view to change status; auto-sends email notification
+P0
+Cancel Order (row action)
+Three-dot menu → Cancel → confirmation modal → restores stock automatically
+P0
+Order Notes (detail page)
+Admin-only notes textarea; not visible to customer
+P1
+Export Orders (bulk action)
+Select rows → Export → CSV download with all order details
+P2
+Rows Per Page
+Dropdown: 10 / 20 / 50 / 100 (default: 20)
+P0
+
+
+6.4 Product Management
+Comprehensive product catalog management with variant-level stock control. Uses standard Data Table (see 6.1) with product-specific filters and actions.
+
+Feature
+Requirement
+Priority
+Products Table (DataTable)
+Implements all 6.1 specs: sortable, filterable, searchable, paginated, row selection
+P0
+Visible Columns (default)
+Thumbnail, Name, SKU, Category, Base Price, Stock Total, Active Toggle, Actions
+P0
+Category Filter
+Multi-select dropdown of all active categories
+P0
+Active Status Filter
+Tri-state: All / Active / Inactive
+P0
+Featured Filter
+Tri-state: All / Featured / Not Featured
+P1
+Search
+Global search across: Name, Name (Burmese), SKU, Description
+P0
+Add Product
+Button above table → /admin/products/new form page
+P0
+Edit Product (row action)
+Three-dot → Update → /admin/products/[id]/edit with all fields editable
+P0
+Delete Product (row action)
+Three-dot → Delete → confirmation → soft delete (is_active=false)
+P0
+Duplicate Product (row action)
+Three-dot → Duplicate → clones product + variants as '(Copy)' → opens edit form
+P1
+Active Toggle (inline)
+Click toggle in table row → updates is_active without page refresh
+P0
+Variant Management
+Edit product page shows nested table of variants (size × color matrix)
+P0
+Stock Editing (variant-level)
+Inline number input per variant; updates stock_quantity on blur
+P0
+Image Management
+Upload multiple; drag-to-reorder; set primary; assign per variant
+P0
+Bulk Status Update
+Select multiple → toolbar button → toggle all selected active/inactive
+P1
+Rows Per Page
+Dropdown: 10 / 20 / 50 / 100 (default: 20)
+P0
+
+
+6.5 Inventory Control
+Granular stock management at variant level (product + size + color combination). Uses standard Data Table (see 6.1).
+
+Feature
+Requirement
+Priority
+Inventory Table (DataTable)
+Implements all 6.1 specs: sortable, filterable, searchable, paginated, row selection
+P0
+Visible Columns (default)
+Product Name, Variant SKU, Size, Color (swatch), Stock Quantity, Actions
+P0
+Low Stock Filter
+Toggle filter: show only variants with stock < 5
+P0
+Out of Stock Filter
+Toggle filter: show only variants with stock = 0
+P0
+Category Filter
+Filter by product category
+P1
+Search
+Global search across: Product Name, Variant SKU
+P0
+Stock Editing (inline)
+Click stock number → inline input → update on blur / Enter key
+P0
+Stock Audit Log (detail)
+Click variant → view history of stock changes with timestamp + admin user
+P1
+Restock Alert Threshold
+Admin sets threshold per product (default: 5); highlights when below
+P1
+Bulk Stock Adjustment
+Select variants → toolbar button → modal to add/subtract stock from all
+P2
+Rows Per Page
+Dropdown: 10 / 20 / 50 / 100 (default: 50 for inventory)
+P0
+
+
+6.6 User Management
+Customer and admin user management. Uses standard Data Table (see 6.1).
+
+Feature
+Requirement
+Priority
+Users Table (DataTable)
+Implements all 6.1 specs: sortable, filterable, searchable, paginated
+P0
+Visible Columns (default)
+Name, Email, Phone, Role, Joined Date, Actions
+P0
+Role Filter
+Multi-select: Customer / Admin
+P0
+Search
+Global search across: Name, Email, Phone
+P0
+Customer Detail
+Click row → view profile, full order history, total spend, lifetime value
+P0
+Admin User Management
+Add/remove admin roles; only super-admin can promote users
+P0
+Account Suspension (row action)
+Three-dot → Suspend → disable customer login (sets is_active=false)
+P1
+Rows Per Page
+Dropdown: 10 / 20 / 50 / 100 (default: 20)
+P0
+
+
+6.7 Catalog Tools — Colors & Sizes Management
+Manage global color and size options available across all products. Both use standard Data Table (see 6.1).
+
+Colors Management
+Feature
+Requirement
+Priority
+Colors Table (DataTable)
+Sortable, filterable, searchable, paginated with row selection
+P0
+Visible Columns (default)
+Color Swatch (hex preview), Name, Name (Burmese), Hex Code, Active, Actions
+P0
+Add Color
+Button → modal form: Name, Name (Burmese), Hex Code, Optional Swatch Upload
+P0
+Edit Color (row action)
+Three-dot → Update → modal with pre-filled form
+P0
+Delete Color (row action)
+Three-dot → Delete → blocked if color used in any variant; show warning + usage count
+P0
+Active Toggle (inline)
+Click toggle → updates is_active without page refresh
+P0
+Search
+Global search across: Name, Name (Burmese), Hex Code
+P0
+Rows Per Page
+Dropdown: 10 / 20 / 50 / 100 (default: 20)
+P0
+
+Sizes Management
+Feature
+Requirement
+Priority
+Sizes Table (DataTable)
+Sortable, filterable, searchable, paginated with row selection
+P0
+Visible Columns (default)
+Size Name, Category, Display Order, Active, Actions
+P0
+Add Size
+Button → modal form: Size Name, Category (dropdown), Display Order
+P0
+Edit Size (row action)
+Three-dot → Update → modal with pre-filled form
+P0
+Delete Size (row action)
+Three-dot → Delete → blocked if size used in any variant; show warning + usage count
+P0
+Active Toggle (inline)
+Click toggle → updates is_active without page refresh
+P0
+Category Filter
+Multi-select: shirts, t-shirts, polo, etc.
+P0
+Reorder (display_order)
+Drag-and-drop rows to reorder; updates display_order field
+P1
+Search
+Global search across: Size Name, Category
+P0
+Rows Per Page
+Dropdown: 10 / 20 / 50 / 100 (default: 20)
+P0
+
+
+6.8 Storefront Controls
+Feature
+Requirement
+Priority
+Hero Banner Editor
+Upload hero image, set headline text, CTA label, and CTA link
+P0
+Sale Banner
+Enable/disable sale banner; edit banner text and link
+P1
+Featured Section
+Manage which products appear in the homepage featured section
+P0
+Announcement Bar
+Optional top-bar text announcement (e.g., free shipping threshold)
+P2
+
+
+
+7. Error Handling, Monitoring & Code Quality
+
+7.1 Sentry Integration
+Configuration
+Details
+SDK
+Next.js Sentry SDK — @sentry/nextjs
+Error Capture
+Unhandled exceptions, promise rejections, API errors
+Performance
+Core Web Vitals, page load traces, Convex query performance
+Session Replay
+10% sample rate — captures user sessions on error
+Source Maps
+Uploaded on deploy; stack traces map to source code
+Alerts
+Immediate alert on: new issues, spike in error rate (>1% sessions), P0 regressions
+Admin Dashboard Widget
+Sentry widget embedded in admin panel homepage
+Environment Separation
+Separate DSNs for development, staging, and production
+
+
+7.2 CodeRabbit — Automated Code Review
+Feature
+Configuration
+Trigger
+Runs on every Pull Request opened against main and develop branches
+Review Scope
+Logic errors, security issues, accessibility violations, performance antipatterns
+Checklist
+Auto-generates PR checklist: tests, documentation, migration notes
+Blocking Policy
+PRs cannot merge if CodeRabbit identifies critical severity issues
+Language
+English review comments; Myanmar-specific domain logic annotated
+Integration
+GitHub PR comments — inline line-level feedback
+
+
+7.3 Error Handling Patterns
+Frontend (Next.js)
+	•	Use Next.js error.tsx boundaries at route segment level
+	•	Global error.tsx at app root catches unhandled rendering errors
+	•	All Convex query/mutation calls wrapped in try-catch with user-friendly toast notifications
+	•	Form validation uses Zod schemas; errors displayed inline below fields
+	•	Network errors display retry UI — never silent failures
+
+Backend (Convex)
+	•	All mutations validate input with Convex validators — reject invalid data at API boundary
+	•	Business logic errors return structured error objects with error codes
+	•	Stock deduction uses optimistic concurrency — race conditions handled gracefully
+	•	Order creation is atomic — partial failures roll back completely
+
+User-Facing Error States
+Scenario
+User Experience
+Product out of stock (race condition at checkout)
+Toast: 'Item sold out. Removed from cart.' Cart updates.
+Network offline
+Persistent banner: 'No internet connection. Changes will sync when back online.'
+Checkout form validation
+Inline red error text below each invalid field; form does not submit
+Server error on order submit
+Toast: 'Unable to place order. Please try again.' Order not created.
+Admin: failed status update
+Toast: 'Failed to update. Refreshing order data...' — revert optimistic update
+
+
+
+8. Page & Route Map
+
+8.1 Storefront Routes
+Route
+Page
+Auth Required
+/
+Homepage — hero, featured products, categories
+No
+/[category]
+Product Listing Page (PLP)
+No
+/[category]/[subcategory]
+Filtered PLP by subcategory
+No
+/products/[slug]
+Product Detail Page (PDP)
+No
+/cart
+Cart page (also accessible as drawer)
+No
+/checkout
+Checkout form
+No (guest allowed)
+/order-confirmation/[id]
+Order success page
+No
+/account
+Customer account dashboard
+Yes — customer
+/account/orders
+Order history list
+Yes — customer
+/account/orders/[id]
+Order detail view
+Yes — customer
+/auth/login
+Sign in page
+No
+/auth/register
+Sign up page
+No
+/auth/forgot-password
+Password reset request
+No
+
+
+8.2 Admin Routes
+Route
+Page
+Auth Required
+/admin
+Admin dashboard — KPIs and recent activity
+Yes — admin
+/admin/orders
+All orders table with filters
+Yes — admin
+/admin/orders/[id]
+Order detail and status management
+Yes — admin
+/admin/products
+Product list and management
+Yes — admin
+/admin/products/new
+Add new product form
+Yes — admin
+/admin/products/[id]/edit
+Edit product form
+Yes — admin
+/admin/inventory
+Inventory overview and stock management
+Yes — admin
+/admin/users
+Customer user list
+Yes — admin
+/admin/users/[id]
+Individual customer detail
+Yes — admin
+/admin/settings
+Storefront controls — banners, hero, featured
+Yes — admin
+
+
+
+9. Non-Functional Requirements
+
+Category
+Requirement
+Performance
+Lighthouse score > 90 on mobile for all storefront pages
+Accessibility
+WCAG 2.1 AA compliance — keyboard navigation, ARIA labels, contrast ratios
+SEO
+Metadata, OG tags, structured data (Product schema) on all PDP pages
+Responsiveness
+Fully responsive: 375px (mobile) → 768px (tablet) → 1280px+ (desktop)
+Security
+HTTPS only; CSP headers; no sensitive data in client-side code; Admin routes server-guarded
+Localization
+Primary: English. Secondary: Myanmar (Burmese) — i18n ready but English at launch
+Currency
+All prices displayed in Myanmar Kyat (MMK / Ks)
+Browser Support
+Chrome 100+, Safari 15+, Firefox 100+, Samsung Internet 18+
+Image Optimization
+All product images served via Next.js Image component with WebP + lazy loading
+Uptime Target
+99.5% monthly uptime via Vercel + Convex infrastructure SLAs
+
+
+
+10. Development Workflow & Conventions
+
+10.1 Git Branching Strategy
+Branch
+Purpose
+Merge Target
+main
+Production-ready code; auto-deploys to production
+—
+develop
+Integration branch; auto-deploys to staging
+main
+feature/[name]
+New features; one branch per ticket
+develop
+fix/[name]
+Bug fixes
+develop
+hotfix/[name]
+Critical production fixes
+main + develop
+
+
+10.2 Pull Request Process
+	•	Every PR requires CodeRabbit review to pass before merge
+	•	Minimum 1 human reviewer approval required
+	•	PRs must reference a GitHub Issue number in the title (e.g., feat: #42 — add product filter)
+	•	All PRs target develop; only release PRs target main
+	•	Sentry release tracking: deploy hook fires on merge to main, creating a new Sentry release
+	•	CI runs: bun install --frozen-lockfile && bun run build — PRs blocked if either fails
+	•	Lockfile: bun.lockb must always be committed; PRs without it are rejected
+
+
+10.3 Commit Message Convention
+Follow Conventional Commits specification:
+
+Type
+Usage
+feat:
+New feature or user-visible functionality
+fix:
+Bug fix
+chore:
+Tooling, dependency updates, config changes
+docs:
+Documentation changes
+refactor:
+Code restructure without behavior change
+test:
+Adding or updating tests
+perf:
+Performance improvements
+
+
+10.4 Bun Command Reference
+All developers must use Bun exclusively. Running npm or yarn in the project is forbidden and will cause lockfile conflicts.
+
+Task
+Command
+Install dependencies
+bun install
+Add a package
+bun add <package>
+Add a dev dependency
+bun add -d <package>
+Remove a package
+bun remove <package>
+Run dev server
+bun run dev
+Build for production
+bun run build
+Run tests
+bun test
+Execute a script
+bun run <script>
+Run a one-off binary
+bun x <binary>
+CI install (locked)
+bun install --frozen-lockfile
+shadcn MCP init
+bunx shadcn@latest mcp init --client codex (or claude/cursor)
+shadcn add component
+bunx shadcn@latest add <component-name>
+shadcn create with preset
+bunx shadcn@latest create --preset "<preset-url>" --template next
+
+
+
+11. Milestones & Delivery Phases
+
+Phase
+Deliverables
+Target
+Phase 0 — Setup
+Repo init, Bun configured (bun.lockb committed). shadcn/ui Nova preset installed. MCP server configured (bunx shadcn@latest mcp init). dashboard-01 template added. Next.js + Convex + Better Auth + Sentry scaffolded. CI/CD pipeline live (bun install --frozen-lockfile). CodeRabbit enabled. DataTable component installed.
+Week 1
+Phase 1 — Storefront MVP
+Homepage, PLP, PDP, Cart, Checkout (COD + Shipping/Pickup), Order Confirmation. Guest checkout. Mobile responsive.
+Week 4
+Phase 2 — Auth & Accounts
+Better Auth flows (register, login, forgot password). Customer account dashboard. Order history.
+Week 5
+Phase 3 — Admin Panel
+Admin dashboard, Orders management (full CRUD + status), Product management (CRUD + stock), Inventory overview.
+Week 7
+Phase 4 — QA & Polish
+Sentry integration testing. Lighthouse optimization. Accessibility audit. CodeRabbit remediation. Cross-browser testing.
+Week 8
+Phase 5 — Launch
+Production deployment to Vercel. DNS + SSL. Sentry production alerts live. Admin training session.
+Week 9
+
+
+
+12. Open Questions & Decisions Required
+
+#
+Question
+Owner
+Due
+1
+What is the official brand name? (Used in logo, pickup store name, email templates)
+Brand Owner
+Before Phase 1
+2
+What is the physical store address and pickup hours?
+Brand Owner
+Before Phase 3
+3
+Which Myanmar phone number / email for order notification sender identity?
+Brand Owner
+Before Phase 3
+4
+Are product categories: Men/Women/Both, or style-based (Formal/Casual/Premium)?
+Product Team
+Before Phase 1
+5
+Launch in English only, or Myanmar language support required at MVP?
+Brand Owner
+Before Phase 0
+6
+Who are the initial admin users? (Email addresses for role assignment)
+Brand Owner
+Before Phase 3
+7
+Is Google/Social OAuth required at launch, or email-only acceptable?
+Product Team
+Before Phase 2
+8
+Should cancelled orders send SMS notifications (requires integration)?
+Brand Owner
+Before Phase 3
+
+
+
+13. Out of Scope (v1.0)
+
+	•	Mobile native app (iOS / Android) — web-only at launch
+	•	Payment gateway integration (KBZPay, Wave Money, card payments) — COD only in v1
+	•	Multi-vendor / marketplace features — single brand only
+	•	Live chat / customer support chat widget
+	•	Product reviews and ratings system
+	•	Loyalty points / rewards program
+	•	Bulk order / wholesale pricing
+	•	SMS order notifications (email only at launch)
+	•	International shipping — Myanmar domestic only
+	•	Multi-currency — MMK only
+	•	Advanced analytics / BI dashboard — Sentry + basic Convex metrics only
+
+
+
+
+End of Document  ·  Myanmar Local Brand Shirt E-Commerce PRD v1.0

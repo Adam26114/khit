@@ -330,6 +330,52 @@ export const searchProducts = query({
   },
 });
 
+export const getCategoryFilters = query({
+  args: { categorySlug: v.string() },
+  handler: async (ctx, { categorySlug }) => {
+    const category = await ctx.db
+      .query("categories")
+      .withIndex("by_slug", (q) => q.eq("slug", categorySlug))
+      .unique();
+
+    if (!category) {
+      return { sizes: [], colors: [] };
+    }
+
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_category", (q) => q.eq("categoryId", category._id))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    const sizesSet = new Set<string>();
+    const colorsMap = new Map<string, string>();
+
+    for (const product of products) {
+      if (product.colorVariants) {
+        for (const cv of product.colorVariants) {
+          if (cv.colorName) {
+            colorsMap.set(cv.colorName, cv.colorHex);
+          }
+          if (cv.selectedSizes) {
+            for (const s of cv.selectedSizes) {
+              sizesSet.add(s);
+            }
+          }
+        }
+      }
+    }
+
+    const sizes = Array.from(sizesSet).sort();
+    const colors = Array.from(colorsMap.entries()).map(([name, hex]) => ({
+      name,
+      hex,
+    }));
+
+    return { sizes, colors };
+  },
+});
+
 export const filterProducts = query({
   args: {
     categorySlug: v.optional(v.string()),

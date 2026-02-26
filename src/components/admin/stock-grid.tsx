@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Size } from "@/lib/product-types";
+import { type Size, getSizeDisplayName } from "@/lib/product-types";
 
 interface StockGridProps {
   sizes: Size[];
@@ -17,7 +17,7 @@ export function StockGrid({ sizes, stock, onChange }: StockGridProps) {
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
         {sizes.map((size) => (
           <div key={size} className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">{size}</Label>
+            <Label className="text-xs text-muted-foreground">{getSizeDisplayName(size)}</Label>
             <Input
               type="number"
               min="0"

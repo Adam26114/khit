@@ -14,6 +14,7 @@ import {
   type ProductColorLike,
   type ProductVariantLike,
 } from "@/lib/product-variants";
+import { getSizeDisplayName } from "@/lib/product-types";
 
 interface Product {
   _id: string;
@@ -222,7 +223,7 @@ export function ProductCard({ product }: ProductCardProps) {
                         : "text-black hover:bg-gray-100"
                     } ${selectedSize === size ? "bg-gray-100" : ""}`}
                   >
-                    {size}
+                    {getSizeDisplayName(size)}
                   </button>
                 );
               })}

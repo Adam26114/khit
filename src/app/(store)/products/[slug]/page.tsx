@@ -5,9 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Heart,
-  Storefront,
+  Store,
   Truck,
-} from "@/components/solar-icons";
+  ChevronRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -16,6 +17,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ProductCard } from "@/components/store/product-card";
+import { Breadcrumbs } from "@/components/store/breadcrumbs";
+import { FormattedPrice } from "@/components/ui/formatted-price";
 import { useCart } from "@/providers/cart-provider";
 import { useQuery, api } from "@/lib/convex";
 import { resolveImageSrc } from "@/lib/image";
@@ -200,22 +203,13 @@ export default function ProductPage({ params }: PageProps) {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-gray-600 mb-8">
-        <Link href="/" className="hover:text-gray-900">
-          Home
-        </Link>
-        <ArrowRight size={12} />
-        <Link href="/men" className="hover:text-gray-900">
-          MEN
-        </Link>
-        <ArrowRight size={12} />
-        <Link href="/men/shirts" className="hover:text-gray-900">
-          Shirts
-        </Link>
-        <ArrowRight size={12} />
-        <span className="text-gray-900">{product.name}</span>
-      </nav>
+      <Breadcrumbs 
+        items={[
+          { label: "Products", href: "/new" },
+          { label: product.name }
+        ]} 
+        className="mb-8"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
         {/* Image Gallery */}
@@ -282,16 +276,16 @@ export default function ProductPage({ params }: PageProps) {
           <div className="flex items-center gap-3 mb-6">
             {hasDiscount ? (
               <>
-                <span className="text-2xl font-medium text-red-600">
-                  {effectivePrice.toLocaleString()} MMK
+                <span className="text-2xl font-semibold text-red-600 tracking-tight">
+                  <FormattedPrice price={effectivePrice} />
                 </span>
-                <span className="text-lg text-gray-400 line-through">
-                  {product.price.toLocaleString()} MMK
+                <span className="text-lg text-gray-300 line-through decoration-gray-200">
+                  <FormattedPrice price={product.price} />
                 </span>
               </>
             ) : (
-              <span className="text-2xl font-medium">
-                {product.price.toLocaleString()} MMK
+              <span className="text-2xl font-semibold tracking-tight">
+                <FormattedPrice price={product.price} />
               </span>
             )}
           </div>
@@ -365,31 +359,31 @@ export default function ProductPage({ params }: PageProps) {
           )}
 
           {/* Add to Cart */}
-          <div className="space-y-3 mb-6">
+          <div className="space-y-3 mb-8">
             <Button
               size="lg"
-              className="w-full"
+              className="w-full h-12 text-sm uppercase tracking-widest font-bold"
               disabled={isSelectionOutOfStock}
               onClick={handleAddToCart}
             >
-              {isSelectionOutOfStock ? "Out of Stock" : "Add to Bag"}
+              {isSelectionOutOfStock ? "SOLD OUT" : "ADD TO BAG"}
             </Button>
 
-            <Button variant="outline" size="lg" className="w-full">
-              <Heart size={16} weight="duotone" />
-              Add to Wishlist
+            <Button variant="outline" size="lg" className="w-full h-12 text-sm uppercase tracking-widest font-bold border-gray-200">
+              <Heart className="size-4 mr-2" />
+              ADD TO WISHLIST
             </Button>
           </div>
 
           {/* Delivery Info */}
-          <div className="space-y-3 text-sm mb-8">
-            <div className="flex items-center gap-3 text-gray-600">
-              <Truck size={20} weight="duotone" />
-              <span>Free delivery to store</span>
+          <div className="space-y-4 text-xs mb-8 border-t pt-8">
+            <div className="flex items-center gap-4 text-gray-500 uppercase tracking-widest font-medium">
+              <Truck className="size-5 text-gray-400" />
+              <span>Standard Delivery (3-5 Days)</span>
             </div>
-            <div className="flex items-center gap-3 text-gray-600">
-              <Storefront size={20} weight="duotone" />
-              <span>Check in-store availability</span>
+            <div className="flex items-center gap-4 text-gray-500 uppercase tracking-widest font-medium">
+              <Store className="size-5 text-gray-400" />
+              <span>Free Pickup in Store</span>
             </div>
           </div>
 
