@@ -36,11 +36,11 @@ export function AdminLayoutShell({ children }: AdminLayoutShellProps) {
   }, [mounted, theme]);
 
   return (
-    <div className={cn("min-h-screen bg-background text-foreground", theme === "dark" && "dark")}>
+    <div className={cn("h-screen overflow-hidden bg-background text-foreground", theme === "dark" && "dark")}>
       <SidebarProvider defaultOpen>
-        <div className="flex min-h-screen">
+        <div className="flex h-full w-full">
           <AdminSidebar />
-          <SidebarInset className="min-h-screen rounded-none border-0 shadow-none">
+          <SidebarInset className="h-full overflow-auto rounded-none border-0 shadow-none">
             <AdminHeader
               theme={mounted ? theme : "light"}
               onToggleTheme={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}

@@ -16,6 +16,8 @@ const categories = [
 
 export default function HomePage() {
   const featuredProducts = useQuery(api.products.getFeatured);
+  const settings = useQuery(api.settings.get);
+
   return (
     <div>
       {/* Hero Banner */}
@@ -31,12 +33,11 @@ export default function HomePage() {
           <div className="absolute inset-0 bg-black/20" />
         </div>
         <div className="relative h-full container mx-auto px-4 flex flex-col items-center justify-center text-center text-white">
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-4">
-            NEW COLLECTION
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-4 uppercase">
+            {settings?.heroBannerLine1 || "NEW COLLECTION"}
           </h1>
           <p className="text-lg md:text-xl max-w-2xl mb-8">
-            Discover premium shirts crafted with quality fabrics for the modern
-            Myanmar professional
+            {settings?.heroBannerLine2 || "Discover premium shirts crafted with quality fabrics for the modern Myanmar professional"}
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
             <Link

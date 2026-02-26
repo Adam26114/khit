@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import {
-  Faders,
+  ListFilter,
   ArrowRight,
-} from "@/components/solar-icons";
+} from "lucide-react";
 import { ProductCard } from "@/components/store/product-card";
+import { Breadcrumbs } from "@/components/store/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -29,8 +30,9 @@ export default function CategoryPage({ params }: PageProps) {
   const categorySlug = params.category;
   const categoryName = categorySlug.toUpperCase();
 
-  const sizes = useQuery(api.sizes.getAll, {});
-  const colors = useQuery(api.colors.getAll, { includeInactive: true });
+  const filterData = useQuery(api.products.getCategoryFilters, { categorySlug });
+  const sizes = filterData?.sizes ?? [];
+  const colors = filterData?.colors ?? [];
 
   // Fetch filtered products from Convex
   const products = useQuery(
@@ -51,9 +53,9 @@ export default function CategoryPage({ params }: PageProps) {
     );
   };
 
-  const toggleColor = (color: string) => {
+  const toggleColor = (colorName: string) => {
     setSelectedColors((prev) =>
-      prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color]
+      prev.includes(colorName) ? prev.filter((c) => c !== colorName) : [...prev, colorName]
     );
   };
 
@@ -61,19 +63,19 @@ export default function CategoryPage({ params }: PageProps) {
     <div className="space-y-6">
       {/* Size Filter */}
       <div>
-        <h4 className="font-medium mb-3">Size</h4>
+        <h4 className="text-[11px] font-bold uppercase tracking-widest mb-4">Size</h4>
         <div className="flex flex-wrap gap-2">
-          {(sizes ?? []).map((size) => (
+          {sizes.map((sizeName: string) => (
             <button
-              key={size._id}
-              onClick={() => toggleSize(size.name)}
-              className={`w-10 h-10 border text-sm font-medium transition-colors ${
-                selectedSizes.includes(size.name)
+              key={sizeName}
+              onClick={() => toggleSize(sizeName)}
+              className={`min-w-[40px] h-10 border text-[11px] font-bold transition-all uppercase tracking-tighter ${
+                selectedSizes.includes(sizeName)
                   ? "border-black bg-black text-white"
-                  : "border-gray-300 hover:border-gray-400"
+                  : "border-gray-200 hover:border-gray-400 text-gray-500"
               }`}
             >
-              {size.name}
+              {sizeName}
             </button>
           ))}
         </div>
@@ -81,18 +83,18 @@ export default function CategoryPage({ params }: PageProps) {
 
       {/* Color Filter */}
       <div>
-        <h4 className="font-medium mb-3">Color</h4>
+        <h4 className="text-[11px] font-bold uppercase tracking-widest mb-4">Color</h4>
         <div className="flex flex-wrap gap-3">
-          {(colors ?? []).map((color) => (
+          {colors.map((color: { name: string; hex: string }) => (
             <button
-              key={color._id}
+              key={color.name}
               onClick={() => toggleColor(color.name)}
-              className={`w-8 h-8 rounded-full border-2 ${
+              className={`w-6 h-6 rounded-full border transition-all ${
                 selectedColors.includes(color.name)
-                  ? "border-black"
-                  : "border-transparent"
+                  ? "border-black scale-110 shadow-sm"
+                  : "border-gray-100"
               }`}
-              style={{ backgroundColor: color.hexCode }}
+              style={{ backgroundColor: color.hex }}
               title={color.name}
             />
           ))}
@@ -122,20 +124,16 @@ export default function CategoryPage({ params }: PageProps) {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-gray-600 mb-6">
-        <Link href="/" className="hover:text-gray-900">
-          Home
-        </Link>
-        <ArrowRight size={12} />
-        <span className="text-gray-900">{categoryName}</span>
-      </nav>
+      <Breadcrumbs 
+        items={[{ label: categoryName }]} 
+        className="mb-8"
+      />
 
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-medium mb-2">{categoryName}</h1>
-        <p className="text-gray-600">
-          {products === undefined ? "Loading..." : `${products.length} products`}
+        <h1 className="text-3xl font-medium mb-2 tracking-tight uppercase">{categoryName}</h1>
+        <p className="text-[11px] text-gray-500 uppercase tracking-widest">
+          {products === undefined ? "LOADING..." : `${products.length} PRODUCTS`}
         </p>
       </div>
 
@@ -145,14 +143,14 @@ export default function CategoryPage({ params }: PageProps) {
           {/* Mobile Filter */}
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="outline" className="lg:hidden">
-                <Faders size={16} weight="duotone" />
-                Filters
+              <Button variant="outline" className="lg:hidden h-10 rounded-none border-gray-200">
+                <ListFilter size={16} />
+                <span className="text-xs uppercase tracking-widest font-medium ml-2">Filters</span>
               </Button>
             </SheetTrigger>
             <SheetContent side="left">
               <SheetHeader>
-                <SheetTitle>Filters</SheetTitle>
+                <SheetTitle className="uppercase tracking-widest text-sm font-bold">Filters</SheetTitle>
               </SheetHeader>
               <div className="mt-6">
                 <FilterContent />
@@ -163,26 +161,24 @@ export default function CategoryPage({ params }: PageProps) {
           {/* Desktop Filter Toggle */}
           <Button
             variant="outline"
-            className="hidden lg:flex"
-            // onClick={() => setShowFilters(!showFilters)}
+            className="hidden lg:flex h-10 rounded-none border-gray-200"
           >
-            <Faders size={16} weight="duotone" />
-            Filters
+            <ListFilter size={16} />
+            <span className="text-xs uppercase tracking-widest font-medium ml-2">Filters</span>
           </Button>
         </div>
 
-        {/* Sort */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600 hidden sm:inline">Sort by:</span>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold hidden sm:inline">Sort by</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as "newest" | "price-low" | "price-high" | "sale")}
-            className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-black"
+            className="border-none bg-transparent hover:text-gray-500 transition-colors text-xs font-semibold uppercase tracking-widest focus:outline-none cursor-pointer"
           >
             <option value="newest">Newest</option>
-            <option value="price-low">Price: Low to High</option>
-            <option value="price-high">Price: High to Low</option>
-            <option value="sale">Sale Items</option>
+            <option value="price-low">Price: Low-High</option>
+            <option value="price-high">Price: High-Low</option>
+            <option value="sale">Sale</option>
           </select>
         </div>
       </div>

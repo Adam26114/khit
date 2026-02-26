@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/providers/cart-provider";
 import { useSession } from "@/lib/auth";
+import { SearchOverlay } from "./search-overlay";
 
 const categories = [
   { name: "WOMEN", href: "/women" },
@@ -136,33 +137,10 @@ export function StoreHeader() {
         </div>
       </div>
 
-      {/* Search Overlay */}
-      {isSearchOpen && (
-        <div className="absolute inset-x-0 top-0 bg-white border-b z-50">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center gap-4">
-              <div className="text-gray-400">
-                <Search
-                  size={24}
-                />
-              </div>
-              <input
-                type="text"
-                placeholder="Search for products..."
-                className="flex-1 bg-transparent outline-none text-lg"
-                autoFocus
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsSearchOpen(false)}
-              >
-                <X size={24} />
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SearchOverlay 
+        isOpen={isSearchOpen} 
+        onClose={() => setIsSearchOpen(false)} 
+      />
     </header>
   );
 }

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   MEASUREMENT_FIELDS,
   inchesToCm,
+  getSizeDisplayName,
   type MeasurementField,
   type Size,
   type SizeMeasurements,
@@ -116,7 +117,7 @@ export function SizeChartPreview({ sizes, measurements }: SizeChartPreviewProps)
                   return (
                     <tr key={size} className="border-b border-border/50 last:border-0">
                       <td className="px-2 py-2 font-semibold text-foreground">
-                        {size}
+                        {getSizeDisplayName(size)}
                       </td>
                       {MEASUREMENT_FIELDS.map((field) => {
                         const val = m[field];

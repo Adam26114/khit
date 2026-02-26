@@ -8,6 +8,11 @@ export const ALL_SIZES: Size[] = [
   "FREE SIZE",
 ];
 
+export function getSizeDisplayName(size: string): string {
+  if (size.toUpperCase() === "FREE SIZE") return "F";
+  return size;
+}
+
 export type MeasurementField = "shoulder" | "chest" | "sleeve" | "waist" | "length";
 
 export const MEASUREMENT_FIELDS: MeasurementField[] = [

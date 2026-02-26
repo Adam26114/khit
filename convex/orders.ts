@@ -272,3 +272,61 @@ export const getTodayStats = query({
     };
   },
 });
+
+export const getRevenueStats = query({
+  args: {},
+  handler: async (ctx) => {
+    // Basic implementation: last 7 days revenue
+    const now = new Date();
+    const stats = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      const startTime = date.getTime();
+      
+      const endTime = startTime + 24 * 60 * 60 * 1000;
+
+      const dayOrders = await ctx.db
+        .query("orders")
+        .withIndex("by_createdAt", (q) => 
+          q.gte("createdAt", startTime).lt("createdAt", endTime)
+        )
+        .collect();
+
+      const revenue = dayOrders.reduce((sum, order) => {
+        if (order.status === "cancelled") return sum;
+        return sum + order.total;
+      }, 0);
+
+      stats.push({
+        date: date.toLocaleDateString("en-US", { weekday: "short", day: "numeric" }),
+        revenue,
+      });
+    }
+
+    const totalOrders = await ctx.db.query("orders").collect();
+    const lifetimeRevenue = totalOrders.reduce((sum, order) => {
+      if (order.status === "cancelled") return sum;
+      return sum + order.total;
+    }, 0);
+
+    return {
+      daily: stats,
+      lifetimeRevenue,
+      totalOrders: totalOrders.length,
+    };
+  },
+});
+
+export const getRecentOrders = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("orders")
+      .withIndex("by_createdAt")
+      .order("desc")
+      .take(args.limit ?? 10);
+  },
+});
