@@ -1,7 +1,13 @@
 import { v } from "convex/values";
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { nanoid } from "nanoid";
 import type { Doc, Id } from "./_generated/dataModel";
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const CANCELLED_STATUS = "cancelled";
+
+type DashboardStatus = "Done" | "In Process";
+type DashboardSourceType = "order" | "inventory" | "product";
 
 function generateOrderNumber(): string {
   const date = new Date();
@@ -33,6 +39,78 @@ async function findColorVariantBySelection(
   }
 
   return null;
+}
+
+function startOfDayTimestamp(date: Date): number {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  return start.getTime();
+}
+
+function toPercentDelta(current: number, previous: number): number {
+  if (previous === 0) {
+    if (current === 0) return 0;
+    return 100;
+  }
+  const delta = ((current - previous) / Math.abs(previous)) * 100;
+  return Math.round(delta * 10) / 10;
+}
+
+function sumOrderRevenue(orders: Doc<"orders">[]): number {
+  return orders.reduce((sum, order) => {
+    if (order.status === CANCELLED_STATUS) return sum;
+    return sum + order.total;
+  }, 0);
+}
+
+function countPendingOrders(orders: Doc<"orders">[]): number {
+  return orders.filter((order) => order.status === "pending").length;
+}
+
+function sumOrderQuantities(orders: Doc<"orders">[]): Map<string, number> {
+  const quantities = new Map<string, number>();
+  for (const order of orders) {
+    if (order.status === CANCELLED_STATUS) continue;
+    for (const item of order.items) {
+      const key = String(item.productId);
+      quantities.set(key, (quantities.get(key) ?? 0) + item.quantity);
+    }
+  }
+  return quantities;
+}
+
+function getProductTotalStock(product: Doc<"products">): number {
+  if (!product.colorVariants || product.colorVariants.length === 0) {
+    return product.stock ?? 0;
+  }
+  return product.colorVariants.reduce((sum, variant) => {
+    return (
+      sum +
+      variant.selectedSizes.reduce((variantSum, size) => {
+        return variantSum + (variant.stock?.[size] ?? 0);
+      }, 0)
+    );
+  }, 0);
+}
+
+async function getOrdersInRange(
+  ctx: QueryCtx,
+  startTs: number,
+  endTs: number
+): Promise<Doc<"orders">[]> {
+  return ctx.db
+    .query("orders")
+    .withIndex("by_createdAt", (q) => q.gte("createdAt", startTs).lt("createdAt", endTs))
+    .collect();
+}
+
+function toDashboardStatus(
+  status: Doc<"orders">["status"] | "healthy" | "warning"
+): DashboardStatus {
+  if (status === "delivered" || status === "confirmed" || status === "healthy") {
+    return "Done";
+  }
+  return "In Process";
 }
 
 export const create = mutation({
@@ -273,6 +351,72 @@ export const getTodayStats = query({
   },
 });
 
+export const getDashboardKpis = query({
+  args: {
+    lowStockThreshold: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const threshold = args.lowStockThreshold ?? 5;
+    const now = new Date();
+    const todayStart = startOfDayTimestamp(now);
+    const tomorrowStart = todayStart + ONE_DAY_MS;
+    const yesterdayStart = todayStart - ONE_DAY_MS;
+
+    const [todayOrders, yesterdayOrders, allOrders, activeProducts, current30Orders, previous30Orders] =
+      await Promise.all([
+        getOrdersInRange(ctx, todayStart, tomorrowStart),
+        getOrdersInRange(ctx, yesterdayStart, todayStart),
+        ctx.db.query("orders").collect(),
+        ctx.db
+          .query("products")
+          .withIndex("by_active", (q) => q.eq("isActive", true))
+          .collect(),
+        getOrdersInRange(ctx, todayStart - 29 * ONE_DAY_MS, tomorrowStart),
+        getOrdersInRange(ctx, todayStart - 59 * ONE_DAY_MS, todayStart - 29 * ONE_DAY_MS),
+      ]);
+
+    const revenueToday = sumOrderRevenue(todayOrders);
+    const revenueYesterday = sumOrderRevenue(yesterdayOrders);
+    const pendingToday = countPendingOrders(todayOrders);
+    const pendingYesterday = countPendingOrders(yesterdayOrders);
+    const totalSales = sumOrderRevenue(allOrders);
+    const current30Revenue = sumOrderRevenue(current30Orders);
+    const previous30Revenue = sumOrderRevenue(previous30Orders);
+
+    const currentStockByProduct = new Map<string, number>();
+    let lowStockItems = 0;
+    for (const product of activeProducts) {
+      const stock = getProductTotalStock(product);
+      currentStockByProduct.set(String(product._id), stock);
+      if (stock <= threshold) {
+        lowStockItems += 1;
+      }
+    }
+
+    const soldTodayByProduct = sumOrderQuantities(todayOrders);
+    let estimatedYesterdayLowStockItems = 0;
+    currentStockByProduct.forEach((stock, productId) => {
+      const estimatedYesterdayStock = stock + (soldTodayByProduct.get(productId) ?? 0);
+      if (estimatedYesterdayStock <= threshold) {
+        estimatedYesterdayLowStockItems += 1;
+      }
+    });
+
+    return {
+      revenueToday,
+      revenueTodayTrend: toPercentDelta(revenueToday, revenueYesterday),
+      pendingOrders: pendingToday,
+      pendingOrdersTrend: toPercentDelta(pendingToday, pendingYesterday),
+      totalSales,
+      totalSalesTrend: toPercentDelta(current30Revenue, previous30Revenue),
+      lowStockItems,
+      lowStockTrend: toPercentDelta(lowStockItems, estimatedYesterdayLowStockItems),
+      todayOrderCount: todayOrders.length,
+      lowStockThreshold: threshold,
+    };
+  },
+});
+
 export const getRevenueStats = query({
   args: {},
   handler: async (ctx) => {
@@ -317,6 +461,153 @@ export const getRevenueStats = query({
       lifetimeRevenue,
       totalOrders: totalOrders.length,
     };
+  },
+});
+
+export const getRevenueSeries = query({
+  args: {
+    range: v.union(v.literal("7d"), v.literal("30d"), v.literal("90d")),
+  },
+  handler: async (ctx, args) => {
+    const days = args.range === "90d" ? 90 : args.range === "30d" ? 30 : 7;
+    const now = new Date();
+    const todayStart = startOfDayTimestamp(now);
+    const windowStart = todayStart - (days - 1) * ONE_DAY_MS;
+    const windowEnd = todayStart + ONE_DAY_MS;
+
+    const orders = await getOrdersInRange(ctx, windowStart, windowEnd);
+    const grouped = new Map<string, { revenue: number; orderCount: number }>();
+
+    for (let i = 0; i < days; i++) {
+      const current = new Date(windowStart + i * ONE_DAY_MS);
+      const iso = current.toISOString().slice(0, 10);
+      grouped.set(iso, { revenue: 0, orderCount: 0 });
+    }
+
+    for (const order of orders) {
+      const date = new Date(order.createdAt).toISOString().slice(0, 10);
+      const entry = grouped.get(date);
+      if (!entry) continue;
+      if (order.status !== CANCELLED_STATUS) {
+        entry.revenue += order.total;
+        entry.orderCount += 1;
+      }
+    }
+
+    return Array.from(grouped.entries()).map(([dateIso, metrics]) => {
+      const date = new Date(`${dateIso}T00:00:00`);
+      return {
+        dateIso,
+        label: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        revenue: metrics.revenue,
+        orderCount: metrics.orderCount,
+      };
+    });
+  },
+});
+
+export const getDashboardTableRows = query({
+  args: {
+    limit: v.optional(v.number()),
+    lowStockThreshold: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 68;
+    const threshold = args.lowStockThreshold ?? 5;
+
+    const [orders, activeProducts, users] = await Promise.all([
+      ctx.db.query("orders").withIndex("by_createdAt").order("desc").take(50),
+      ctx.db
+        .query("products")
+        .withIndex("by_active", (q) => q.eq("isActive", true))
+        .collect(),
+      ctx.db.query("users").collect(),
+    ]);
+
+    const reviewers = users
+      .filter((user) => user.role === "admin")
+      .map((user) => user.name?.trim())
+      .filter((name): name is string => Boolean(name));
+
+    const reviewerAt = (index: number): string => {
+      if (reviewers.length === 0 || index % 3 === 0) {
+        return "Assign reviewer";
+      }
+      return reviewers[index % reviewers.length];
+    };
+
+    const orderRows = orders.map((order, index) => {
+      const quantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
+      return {
+        id: `order-${order._id}`,
+        header: `Order ${order.orderNumber}`,
+        sectionType: "Order",
+        status: toDashboardStatus(order.status),
+        target: quantity,
+        limit: 5,
+        reviewer: reviewerAt(index),
+        sourceType: "order" as DashboardSourceType,
+        sourceId: String(order._id),
+      };
+    });
+
+    const inventoryRows: Array<{
+      id: string;
+      header: string;
+      sectionType: string;
+      status: DashboardStatus;
+      target: number;
+      limit: number;
+      reviewer: string;
+      sourceType: DashboardSourceType;
+      sourceId: string;
+    }> = [];
+
+    for (const product of activeProducts) {
+      for (const variant of product.colorVariants ?? []) {
+        for (const size of variant.selectedSizes) {
+          const stock = variant.stock?.[size] ?? 0;
+          inventoryRows.push({
+            id: `inventory-${product._id}-${variant.id}-${size}`,
+            header: `${product.name} (${variant.colorName} / ${size})`,
+            sectionType: "Inventory",
+            status: toDashboardStatus(stock > threshold ? "healthy" : "warning"),
+            target: stock,
+            limit: threshold,
+            reviewer: reviewerAt(inventoryRows.length + orderRows.length),
+            sourceType: "inventory",
+            sourceId: `${product._id}:${variant.id}:${size}`,
+          });
+        }
+      }
+    }
+
+    const productRows = activeProducts.map((product, index) => {
+      const totalStock = getProductTotalStock(product);
+      const isPublished = product.isPublished !== false;
+      return {
+        id: `product-${product._id}`,
+        header: product.name,
+        sectionType: "Product",
+        status: toDashboardStatus(isPublished && totalStock > threshold ? "healthy" : "warning"),
+        target: totalStock,
+        limit: threshold,
+        reviewer: reviewerAt(index + orderRows.length + inventoryRows.length),
+        sourceType: "product" as DashboardSourceType,
+        sourceId: String(product._id),
+      };
+    });
+
+    const rows = [...orderRows, ...inventoryRows, ...productRows]
+      .sort((a, b) => {
+        if (a.status !== b.status) {
+          return a.status === "In Process" ? -1 : 1;
+        }
+        return a.header.localeCompare(b.header);
+      })
+      .slice(0, limit);
+
+    return rows;
   },
 });
 

@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, MoonStar, SunMedium } from "lucide-react";
+import { ChevronRight, LogOut, MoonStar, SunMedium } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { signOut, useSession } from "@/lib/auth";
 import { getAdminPageTitle } from "@/components/admin/sidebar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Separator } from "@/components/ui/separator";
 
 interface AdminHeaderProps {
   theme: "light" | "dark";
@@ -38,10 +39,19 @@ export function AdminHeader({ theme, onToggleTheme }: AdminHeaderProps) {
   return (
     <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
       <div className="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
-        <SidebarTrigger />
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="h-4" />
 
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold leading-none">{pageTitle}</p>
+          <p className="flex items-center gap-1 truncate text-sm font-semibold leading-none">
+            <span>Dashboard</span>
+            {pageTitle !== "Dashboard" ? (
+              <>
+                <ChevronRight className="size-3.5 text-muted-foreground" />
+                <span>{pageTitle}</span>
+              </>
+            ) : null}
+          </p>
           <p className="mt-1 text-xs text-muted-foreground leading-none">Khit Admin Panel</p>
         </div>
 

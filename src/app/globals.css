@@ -31,11 +31,14 @@
     --sidebar-accent: 240 4.8% 95.9%;
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
     --khit-white: #FFFFFF;
     --khit-black: #000000;
     --khit-gray: #F5F5F5;
     --khit-gray-dark: #666666;
+    --khit-royal-blue: #002365;
+    --khit-royal-blue-hover: #001d55;
+    --khit-royal-blue-foreground: #FFFFFF;
   }
 
   .dark {
@@ -66,6 +69,9 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    --khit-royal-blue: #002365;
+    --khit-royal-blue-hover: #001d55;
+    --khit-royal-blue-foreground: #FFFFFF;
   }
 }
 
@@ -73,4 +79,19 @@
   * { @apply border-border; }
   html { scroll-behavior: smooth; }
   body { @apply bg-background text-foreground antialiased; }
+}
+
+@layer utilities {
+  @keyframes khit-progress-indeterminate {
+    0% {
+      transform: translateX(-120%);
+    }
+    100% {
+      transform: translateX(220%);
+    }
+  }
+
+  .animate-khit-progress-indeterminate {
+    animation: khit-progress-indeterminate 1.2s ease-in-out infinite;
+  }
 }

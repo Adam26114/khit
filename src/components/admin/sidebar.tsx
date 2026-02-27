@@ -6,18 +6,19 @@ import {
   Command,
   FolderTree,
   LifeBuoy,
+  Search,
   Package,
-  Send,
   Settings,
   ShoppingCart,
   SquareTerminal,
-  Users,
+  BarChart3,
   Warehouse,
 } from "lucide-react";
 
 import { useSession } from "@/lib/auth";
 import { NavMain } from "@/components/admin/nav-main";
 import { NavProjects } from "@/components/admin/nav-projects";
+import { NavSecondary } from "@/components/admin/nav-secondary";
 import { NavUser } from "@/components/admin/nav-user";
 import {
   Sidebar,
@@ -41,26 +42,23 @@ const data = {
         { title: "Inventory", url: "/admin/inventory", icon: Warehouse },
       ],
     },
-    {
-      title: "Settings",
-      url: "/admin/settings",
-      icon: Settings,
-      items: [
-        { title: "Users", url: "/admin/users", icon: Users },
-        { title: "Support", url: "/admin/settings", icon: LifeBuoy },
-        { title: "Feedback", url: "/admin/settings", icon: Send },
-      ],
-    },
   ],
   projects: [
     {
       name: "Products",
       url: "/admin/products",
       icon: Package,
-      items: [
-        { title: "Categories", url: "/admin/categories", icon: FolderTree },
-      ],
+      items: [{ title: "Categories", url: "/admin/categories", icon: FolderTree }],
     },
+  ],
+  documents: [
+    { title: "Reports", url: "/admin/orders", icon: BarChart3 },
+    { title: "Catalog", url: "/admin/catalog", icon: Package },
+  ],
+  footer: [
+    { title: "Settings", url: "/admin/settings", icon: Settings },
+    { title: "Get Help", url: "/admin/settings", icon: LifeBuoy },
+    { title: "Search", url: "/admin/search", icon: Search },
   ],
 };
 
@@ -78,6 +76,8 @@ export function getAdminPageTitle(pathname: string): string {
     "/admin/inventory": "Inventory",
     "/admin/users": "Users",
     "/admin/settings": "Settings",
+    "/admin/catalog": "Catalog",
+    "/admin/search": "Search",
   };
 
   const matched = Object.keys(pages).find((key) => isActivePath(pathname, key));
@@ -119,8 +119,10 @@ export function AdminSidebar(props: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-        <NavMain title="Platform" items={data.navMain} />
+        <NavMain title="Platform" items={data.navMain} showQuickCreate />
         <NavProjects projects={data.projects} />
+        <NavSecondary title="Documents" items={data.documents} />
+        <NavSecondary className="mt-auto" items={data.footer} />
       </SidebarContent>
 
       <SidebarFooter>

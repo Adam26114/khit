@@ -2,8 +2,8 @@
 
 **Project:** Local Brand Khit (Myanmar Menswear E-commerce)  
 **Started:** 2026-02-11  
-**Last Updated:** 2026-02-25  
-**Current Status:** Phase 1, 2, 3, 4, 5 complete; Storefront Search & Admin Analytics implemented
+**Last Updated:** 2026-02-27  
+**Current Status:** Phase 1, 2, 3, 4, 5 complete; dashboard-01 admin upgrade implemented
 
 ---
 
@@ -154,7 +154,45 @@ Completed:
 - Storefront Navigation Polish
   - Reusable `Breadcrumbs` component for PLP and PDP
   - Standardized `FormattedPrice` usage across all store pages
-  - Complete elimination of legacy `solar-icons` (re-replaced with Lucide)
+- Complete elimination of legacy `solar-icons` (re-replaced with Lucide)
+
+---
+
+### 2026-02-27 - Dashboard-01 Admin Upgrade ✅
+
+Completed:
+
+- Rebuilt `/admin` dashboard layout using the `dashboard-01` composition pattern
+- Added live Convex dashboard contracts:
+  - `orders.getDashboardKpis`
+  - `orders.getRevenueSeries`
+  - `orders.getDashboardTableRows`
+- Replaced static weekly bars with interactive range-based area chart (90d/30d/7d)
+- Replaced simple recent-orders card with advanced operations table:
+  - tabs, drag handles, checkboxes, badges, reviewer selector, pagination footer
+- Upgraded sidebar to grouped sections with Quick Create CTA and document/footer blocks
+- Upgraded header to breadcrumb-style layout while preserving user email + logout controls
+- Kept reviewer assignment + row reorder local UI state (no schema migration)
+
+Verification:
+
+- `bunx tsc --noEmit` ✅
+- `bunx eslint .` ⚠️ (fails on existing pre-upgrade lint debt outside dashboard scope)
+
+---
+
+### 2026-02-27 - Reusable Admin Loading State ✅
+
+Completed:
+
+- Added reusable branded admin loading component with:
+  - `Command` brand icon
+  - centered `Loading...` label
+  - determinate shadcn `Progress` bar with synchronized `0% -> 100%`
+- Replaced auth/session pending spinner in `AdminGuard` with branded loading state
+- Added route-level fallback for admin group via `src/app/(admin)/loading.tsx`
+- Added reusable `Progress` primitive (`src/components/ui/progress.tsx`) supporting both determinate and optional indeterminate mode
+- Added configurable loading pacing (`durationMs`) + percentage label toggle (`showPercentage`) in admin loading state
 
 ---
 
@@ -257,13 +295,14 @@ bunx convex run products:migrateLegacyProductsToVariantModel '{"dryRun": false}'
 - [x] Inventory module (full CRUD implemented)
 - [x] Users module (full listing and details implemented)
 - [x] Settings module (dynamic storefront banners and contact info implemented)
+- [x] Dashboard-01 admin UI upgrade with live Convex KPI/chart/table feeds
 
 ---
 
 ## Next Focus
 
-1. Implement Admin Dashboard Analytics (Revenue charts, Top selling products)
-2. Storefront Search (Full-text search with instant results overlay)
+1. Close existing ESLint debt across store/admin modules (`any`, unused imports, unescaped entities)
+2. Expand dashboard table tab content beyond Outline with dedicated live data views
 3. Breadcrumbs and SEO improvements (Meta tags, Sitemap)
 4. Rich Media UX (Multi-image reordering, variant-specific bulk uploads)
 5. Newsletter & Sale Banners

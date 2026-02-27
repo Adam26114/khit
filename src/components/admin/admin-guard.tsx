@@ -5,7 +5,7 @@ import { useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../convex/_generated/api";
 import { useSession } from "@/lib/auth";
-import { Loader2 } from "lucide-react";
+import { AdminLoadingState } from "@/components/admin/admin-loading-state";
 
 export function AdminGuard({ children }: { children: React.ReactNode }) {
   const { data: session, isPending: isSessionPending } = useSession();
@@ -23,11 +23,7 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   }, [isSessionPending, session, isAdmin, router]);
 
   if (isSessionPending || isAdmin === undefined) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
+    return <AdminLoadingState />;
   }
 
   if (!session || !isAdmin) {

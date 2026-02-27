@@ -47,6 +47,10 @@ function isActivePath(pathname: string, url: string): boolean {
   return pathname === url || pathname.startsWith(`${url}/`);
 }
 
+function isLeafPath(pathname: string, url: string): boolean {
+  return pathname === url;
+}
+
 export function NavProjects({ projects }: NavProjectsProps) {
   const pathname = usePathname();
   const { state } = useSidebar();
@@ -81,8 +85,10 @@ export function NavProjects({ projects }: NavProjectsProps) {
             const Icon = project.icon;
             const subItems = project.items ?? [];
             const hasChildren = subItems.length > 0;
-            const active = isActivePath(pathname, project.url);
-            const isOpen = openItems[project.name] ?? active;
+            const leafActive = isLeafPath(pathname, project.url);
+            const childActive = subItems.some((subItem) => isActivePath(pathname, subItem.url));
+            const active = collapsed ? leafActive || childActive : leafActive;
+            const isOpen = openItems[project.name] ?? (leafActive || childActive);
 
             return (
               <Collapsible
@@ -101,7 +107,10 @@ export function NavProjects({ projects }: NavProjectsProps) {
                     asChild
                     isActive={active}
                     tooltip={project.name}
-                    className={cn(!collapsed && hasChildren && "pr-10")}
+                    className={cn(
+                      !collapsed && hasChildren && "pr-10",
+                      active && "bg-black text-white hover:bg-black/90 hover:text-white"
+                    )}
                   >
                     <Link href={project.url}>
                       <Icon className="h-4 w-4 shrink-0" />
@@ -111,7 +120,12 @@ export function NavProjects({ projects }: NavProjectsProps) {
 
                   {!collapsed && hasChildren ? (
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuAction className="data-[state=open]:rotate-90">
+                      <SidebarMenuAction
+                        className={cn(
+                          "data-[state=open]:rotate-90",
+                          active && "text-white hover:bg-black/90 hover:text-white"
+                        )}
+                      >
                         <ChevronRight className="h-4 w-4" />
                         <span className="sr-only">Toggle</span>
                       </SidebarMenuAction>
@@ -123,14 +137,14 @@ export function NavProjects({ projects }: NavProjectsProps) {
                       <SidebarMenuSub>
                         {subItems.map((subItem) => {
                           const SubIcon = subItem.icon;
-                          const subActive = pathname === subItem.url;
+                          const subActive = isActivePath(pathname, subItem.url);
                           return (
                             <SidebarMenuSubItem key={subItem.title}>
                               <SidebarMenuSubButton
                                 asChild
                                 className={cn(
                                   "h-8 text-sm",
-                                  subActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+                                  subActive && "bg-black text-white hover:bg-black/90 hover:text-white"
                                 )}
                               >
                                 <Link href={subItem.url} className="flex items-center gap-2">

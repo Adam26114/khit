@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { requireAdmin } from "./users";
 
 export const getInventory = query({
@@ -10,7 +11,7 @@ export const getInventory = query({
     const products = await ctx.db.query("products").collect();
 
     const inventoryItems: Array<{
-      productId: string;
+      productId: Id<"products">;
       productName: string;
       colorVariantId: string;
       colorName: string;

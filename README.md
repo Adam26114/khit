@@ -2,7 +2,7 @@
 
 Premium Myanmar fashion storefront and admin panel, built with **Next.js 14 + Convex + Better Auth + Bun**.
 
-Last updated: **February 24, 2026**
+Last updated: **February 27, 2026**
 
 ## Overview
 
@@ -20,8 +20,8 @@ This repository powers:
 | Storefront | Homepage, category pages, product detail, cart drawer, checkout (COD), order confirmation |
 | Authentication | Better Auth email/password login + register, session-aware routing |
 | Customer Account | Profile editing, order history page |
-| Admin Core | Dashboard, products CRUD, categories CRUD, orders status updates |
-| Admin UI System | Sidebar shell, theme toggle (light/dark), reusable data table, zod validation, sonner notifications |
+| Admin Core | Acme-style dashboard (KPI trends, interactive area chart, operations table), products CRUD, categories CRUD, orders status updates |
+| Admin UI System | Grouped admin sidebar with Quick Create CTA, breadcrumb header, theme toggle (light/dark), reusable data tables, zod validation, sonner notifications |
 | Media Handling | Convex storage upload URL flow + `/api/storage/[id]` signed URL proxy |
 
 ## Route Map
@@ -44,9 +44,6 @@ This repository powers:
 - `/admin/products`
 - `/admin/categories`
 - `/admin/orders`
-
-### Placeholder Pages
-
 - `/admin/inventory`
 - `/admin/users`
 - `/admin/settings`
@@ -119,6 +116,7 @@ See `.env.local.example` for starter values.
 | `bun run build` | Build production app |
 | `bun run start` | Start production server |
 | `bun run lint` | Run ESLint |
+| `bunx eslint .` | Run full workspace ESLint |
 | `bunx convex dev` | Start Convex development runtime |
 | `bunx tsc --noEmit` | Run TypeScript type checking |
 
