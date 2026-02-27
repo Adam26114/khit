@@ -1,30 +1,49 @@
 "use client";
 
+import * as React from "react";
+
 import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { 
+  Card, 
+  CardContent, 
+  CardHeader, 
+  CardTitle, 
+  CardDescription,
+  CardAction
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FormattedPrice } from "@/components/ui/formatted-price";
 import { 
-  AlertTriangle, 
-  ArrowRight, 
-  Clock, 
-  Package, 
-  ShoppingCart, 
-  TrendingUp, 
-  Users,
-  Eye
+  Plus,
+  Eye,
+  TrendingUp,
+  ShoppingCart,
+  GripVertical
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { SectionCards } from "@/components/admin/section-cards";
+import { ChartAreaInteractive } from "@/components/admin/chart-area-interactive";
+import { DataTableV2 } from "@/components/admin/data-table-v2";
+import { ColumnDef } from "@tanstack/react-table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { 
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from "@/components/ui/tabs";
 
 export default function AdminDashboard() {
   const todayStats = useQuery(api.orders.getTodayStats);
   const productsCount = useQuery(api.products.getCount);
   const lowStockProducts = useQuery(api.products.getLowStock, { threshold: 5 });
   const revenueStats = useQuery(api.orders.getRevenueStats);
-  const recentOrders = useQuery(api.orders.getRecentOrders, { limit: 5 });
+  const recentOrders = useQuery(api.orders.getRecentOrders, { limit: 10 });
 
   const isLoading = 
     todayStats === undefined || 
@@ -33,214 +52,200 @@ export default function AdminDashboard() {
     revenueStats === undefined ||
     recentOrders === undefined;
 
-  return (
-    <div className="space-y-6 pb-8">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Admin Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Track sales, monitor stock, and manage your store.
-        </p>
-      </div>
+  const dashboardStats = React.useMemo(() => ({
+    revenue: todayStats?.revenue ?? 0,
+    pending: todayStats?.pending ?? 0,
+    productsCount: productsCount ?? 0,
+    lowStockCount: lowStockProducts?.length ?? 0,
+  }), [todayStats, productsCount, lowStockProducts]);
 
-      {/* Top Stats Row */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="border border-border/60 shadow-sm transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Revenue Today</CardTitle>
-            <TrendingUp className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
-              <div className="text-2xl font-bold tracking-tight">
-                <FormattedPrice price={todayStats?.revenue ?? 0} />
-              </div>
-            )}
-            <p className="text-[10px] text-muted-foreground mt-1">
-              From {todayStats?.total ?? 0} orders today
-            </p>
-          </CardContent>
-        </Card>
+  const columns: ColumnDef<any>[] = [
+    {
+      id: "drag",
+      header: () => null,
+      cell: ({ row }) => {
+        const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
+          id: row.original._id,
+        });
 
-        <Card className="border border-border/60 shadow-sm transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pending Orders</CardTitle>
-            <Clock className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <div className="text-2xl font-bold tracking-tight">{todayStats?.pending ?? 0}</div>
-            )}
-            <p className="text-[10px] text-muted-foreground mt-1">Requires attention</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-border/60 shadow-sm transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Sales</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
-              <div className="text-2xl font-bold tracking-tight">
-                <FormattedPrice price={revenueStats?.lifetimeRevenue ?? 0} />
-              </div>
-            )}
-            <p className="text-[10px] text-muted-foreground mt-1">Lifetime earnings</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-border/60 shadow-sm transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Low Stock</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <div className="text-2xl font-bold tracking-tight">{lowStockProducts?.length ?? 0}</div>
-            )}
-            <p className="text-[10px] text-muted-foreground mt-1">Items below threshold</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Weekly Revenue Bar Chart (Simulated) */}
-        <Card className="lg:col-span-2 border border-border/60 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold">Weekly Revenue</CardTitle>
-            <CardDescription>Sales overview for the last 7 days.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-[200px] w-full" />
-            ) : (
-              <div className="flex h-[200px] items-end justify-between gap-2 px-2 pt-4">
-                {revenueStats.daily.map((day, idx) => {
-                  const maxRevenue = Math.max(...revenueStats.daily.map(d => d.revenue), 1);
-                  const height = `${(day.revenue / maxRevenue) * 100}%`;
-                  
-                  return (
-                    <div key={idx} className="group relative flex flex-1 flex-col items-center gap-2">
-                      <div className="absolute -top-6 hidden group-hover:block">
-                        <Badge variant="secondary" className="text-[10px] whitespace-nowrap px-1.5 py-0">
-                          <FormattedPrice price={day.revenue} />
-                        </Badge>
-                      </div>
-                      <div 
-                        className="w-full max-w-[40px] rounded-t-sm bg-primary/20 transition-all hover:bg-primary/40" 
-                        style={{ height: day.revenue === 0 ? "4px" : height }}
-                      />
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{day.date}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Quick Actions Card */}
-        <Card className="border border-border/60 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold">Quick Actions</CardTitle>
-            <CardDescription>Manage store operations quickly.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            {[
-              { href: "/admin/orders", label: "View Orders", icon: ShoppingCart },
-              { href: "/admin/products", label: "Catalog Management", icon: Package },
-              { href: "/admin/inventory", label: "Stock Control", icon: TableIcon },
-              { href: "/admin/users", label: "User Management", icon: Users },
-            ].map((action, i) => (
-              <Button key={i} variant="outline" size="sm" className="justify-between h-9 px-3 group" asChild>
-                <Link href={action.href}>
-                  <span className="flex items-center gap-2">
-                    <action.icon className="size-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-                    {action.label}
-                  </span>
-                  <ArrowRight className="size-3 text-muted-foreground/50 group-hover:text-primary transition-transform group-hover:translate-x-0.5" />
-                </Link>
-              </Button>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Orders Table */}
-      <Card className="border border-border/60 shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-sm font-semibold">Recent Orders</CardTitle>
-            <CardDescription>Last 5 orders placed on your store.</CardDescription>
+        return (
+          <div
+            ref={setNodeRef}
+            {...attributes}
+            {...listeners}
+            className="flex items-center justify-center w-8 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-foreground transition-colors"
+          >
+            <GripVertical className="size-3.5" />
           </div>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/admin/orders" className="text-xs flex items-center gap-1.5 text-primary">
-              View all <ArrowRight className="size-3" />
+        );
+      },
+    },
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+          className="translate-y-[2px]"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+          className="translate-y-[2px]"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "orderNumber",
+      header: "Order",
+      cell: ({ row }) => (
+        <span className="font-medium text-foreground">{row.getValue("orderNumber")}</span>
+      ),
+    },
+    {
+      accessorKey: "customerInfo",
+      header: "Customer",
+      cell: ({ row }) => {
+        const customer = row.original.customerInfo;
+        return (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">{customer.name}</span>
+            <span className="text-xs text-muted-foreground">{customer.email}</span>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <Badge variant="outline" className="capitalize px-2 py-0.5 text-[10px] font-medium">
+          {row.getValue("status")}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "total",
+      header: () => <div className="text-right">Total</div>,
+      cell: ({ row }) => (
+        <div className="text-right">
+          <FormattedPrice price={row.getValue("total")} className="font-semibold" />
+        </div>
+      ),
+    },
+    {
+      id: "actions",
+      header: () => null,
+      cell: ({ row }) => (
+        <div className="text-right">
+          <Button variant="ghost" size="icon" className="size-8" asChild>
+            <Link href={`/admin/orders/${row.original._id}`}>
+              <Eye className="size-4" />
             </Link>
           </Button>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-8 p-0 @container/main">
+      <div className="flex items-center justify-between">
+        <div className="grid gap-1">
+          <h1 className="text-3xl font-semibold tracking-tight">Admin Dashboard</h1>
+          <p className="text-muted-foreground text-sm">
+            Overview of your store's performance and recent activity.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-9 gap-2" asChild>
+            <Link href="/admin/products/new">
+              <Plus className="size-4" />
+              Add Product
+            </Link>
+          </Button>
+          <Button size="sm" className="h-9 gap-2" asChild>
+            <Link href="/admin/orders">
+              <ShoppingCart className="size-4" />
+              Manage Orders
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-32 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : (
+        <SectionCards stats={dashboardStats} />
+      )}
+
+      <div className="grid gap-6">
+        {isLoading ? (
+          <Skeleton className="h-[400px] w-full rounded-xl" />
+        ) : (
+          <ChartAreaInteractive data={revenueStats.daily} />
+        )}
+      </div>
+
+      <div className="flex flex-col gap-6">
+        <Tabs defaultValue="all" className="w-full">
+          <div className="flex flex-col gap-4 mb-4">
+            <div className="grid gap-1">
+              <h2 className="text-xl font-semibold tracking-tight">Recent Orders</h2>
             </div>
-          ) : recentOrders.length === 0 ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              No orders found yet.
+            
+            <div className="flex items-center">
+              <TabsList className="bg-muted/50 p-0.5 h-9">
+                <TabsTrigger value="all" className="px-4 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  All Orders
+                </TabsTrigger>
+                <TabsTrigger value="pending" className="px-4 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  Pending <Badge variant="secondary" className="ml-2 h-4 px-1 text-[10px]">3</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="processing" className="px-4 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  Processing
+                </TabsTrigger>
+                <TabsTrigger value="completed" className="px-4 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  Completed
+                </TabsTrigger>
+              </TabsList>
             </div>
-          ) : (
-            <div className="relative w-full overflow-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                    <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground">Order</th>
-                    <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground">Customer</th>
-                    <th className="h-10 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
-                    <th className="h-10 px-2 text-right align-middle font-medium text-muted-foreground">Amount</th>
-                    <th className="h-10 px-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentOrders.map((order) => (
-                    <tr key={order._id} className="border-b transition-colors hover:bg-muted/50">
-                      <td className="p-2 align-middle font-medium">{order.orderNumber}</td>
-                      <td className="p-2 align-middle">
-                        <div className="flex flex-col">
-                          <span className="text-xs font-medium">{order.customerInfo.name}</span>
-                          <span className="text-[10px] text-muted-foreground">{order.customerInfo.email}</span>
-                        </div>
-                      </td>
-                      <td className="p-2 align-middle">
-                        <Badge variant="outline" className="text-[10px] font-normal uppercase py-0 px-1.5">
-                          {order.status}
-                        </Badge>
-                      </td>
-                      <td className="p-2 align-middle text-right">
-                        <FormattedPrice price={order.total} className="text-xs" />
-                      </td>
-                      <td className="p-2 align-middle text-right">
-                        <Button variant="ghost" size="icon" className="size-7" asChild>
-                          <Link href={`/admin/orders/${order._id}`}>
-                            <Eye className="size-3.5" />
-                          </Link>
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+
+          <Card className="flex flex-col overflow-hidden @container/card border-none shadow-none bg-transparent">
+            <CardContent className="p-0">
+              <TabsContent value="all" className="m-0 border-none outline-none">
+                <div className="bg-card">
+                  <div className="px-0 py-0">
+                    {isLoading ? (
+                      <div className="p-6 space-y-4">
+                        {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+                      </div>
+                    ) : (
+                      <DataTableV2 
+                        columns={columns} 
+                        data={recentOrders} 
+                        getRowId={(row) => row._id}
+                        searchKey="orderNumber"
+                      />
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+            </CardContent>
+          </Card>
+        </Tabs>
+      </div>
     </div>
   );
 }
